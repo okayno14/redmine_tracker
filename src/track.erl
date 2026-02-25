@@ -12,9 +12,8 @@
     %% end_track
     %% создать рекорд из csv-строки
     %% from_csv
-    to_csv/1
-    %% положить через redmine api трек
-    %% push_to_redmine
+    to_csv/1,
+    push_to_redmine/1
     %% get
     %% set
     %% delete
@@ -22,6 +21,7 @@
 
 -record(track, {
     id :: pos_integer(),
+    %% TODO вынести в тип
     activity ::
         design
         | code
@@ -32,6 +32,7 @@
         | management
         | documentation
         | support,
+    %% TODO вынести в тип
     state :: tracking | finished,
     task :: unicode:unicode_binary(),
     timestamp_begin :: calendar:datetime(),
@@ -94,6 +95,67 @@ to_csv(Track) ->
         "\"", DescBin/binary, "\"", ",",
         StateBin/binary, ";"
     >>.
+
+-spec push_to_redmine(Track :: track()) ->
+    ok | {error, Reason :: term()}.
+push_to_redmine(Track) ->
+    #track{
+        % id = Id,
+        %% TODO в xml идёт какой-тот activity_id, надо понять, как он выглядит у нас
+        activity = Activity,
+        state = State,
+        task = Task,
+        timestamp_begin = TsBegin,
+        timestamp_end = TsEnd,
+        desc = Desc
+    } = Track,
+    RedmineInstance = "red.eltex.loc/time_entries.xml",
+    TrackXml =
+        xmerl:export_simple(
+            [
+                {time_entry, [
+                    %% TODO надо добавить project_id в track, иначе - неоткуда брать
+                    %% TODO временно можно захардкодить SSW, потом сделать так, чтобы мы искали по имени и сейвили локально в бд
+                    {project_id, ["228"]},
+                    %% TODO надо добавить извлечение таски, либо закрепить в валидаторе так, чтобы был только номер задачи
+                    {issue_id, [erlang:binary_to_list(Task)]},
+                    %% TODO надо брать из конфига, но в эту функцию параметр должен попадать через аргумент
+                    {user_id, ["1337"]},
+                    {hours, [
+                        erlang:float_to_list(
+                            %% TODO вынести в отдельную функцию
+                            (calendar:datetime_to_gregorian_seconds(TsEnd) -
+                                calendar:datetime_to_gregorian_seconds(TsBegin)) /
+                                3600,
+                            [{decimals, 1}]
+                        )
+                    ]},
+                    {comments, [erlang:binary_to_list(Desc)]},
+                    {spent_on, [
+                        erlang:binary_to_list(
+                            erlang:hd(
+                                string:split(datetime_to_binary(TsBegin), <<" ">>)
+                            )
+                        )
+                    ]}
+                ]}
+            ],
+            xmerl_xml
+        ),
+
+    ?LOG_ERROR("~ts", [lists:flatten(TrackXml)]),
+    ok.
+    % case
+    %     httpc:request(
+    %         post,
+    %         {RedmineInstance, [], <<"application/xml">>, TrackXml},
+    %         HttpOptions = [],
+    %         Options = []
+    %     )
+    % of
+    %     {ok, _} -> ok;
+    %     {error, Reason} -> {error, Reason}
+    % end.
 
 datetime_to_binary(DateTime) ->
     {{Y, Month, D}, {H, Min, S}} = DateTime,
