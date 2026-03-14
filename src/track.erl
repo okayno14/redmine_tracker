@@ -21,17 +21,7 @@
 
 -record(track, {
     id :: pos_integer(),
-    %% TODO вынести в тип
-    activity ::
-        design
-        | code
-        | code_review
-        | analysis
-        | discuss
-        | test
-        | management
-        | documentation
-        | support,
+    activity :: {ActivityID :: pos_integer(), Activity :: binary()},
     %% TODO вынести в тип
     state :: tracking | finished,
     task :: unicode:unicode_binary(),
@@ -46,11 +36,19 @@
 
 -opaque track() :: #track{}.
 
-new(Id, Activity, Task, Desc) ->
+new(Id, Activity, Task, Desc) when is_binary(Activity) ->
+    {ok, Activities} = application:get_env(redmine_tracker, activities),
+    Activity2 =
+    case maps:get(Activity, Activities, not_found) of
+        not_found -> {error, activity_not_found};
+        ActivityID -> {ActivityID, Activity}
+    end,
+    new(Id, Activity2, Task, Desc);
+new(Id, Activity = {_, _}, Task, Desc) ->
     T1 = calendar:universal_time(),
     new(Id, Activity, Task, T1, T1, Desc).
 
-new(Id, Activity, Task, TsBegin, TsEnd, Desc) ->
+new(Id, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
     #track{
         id = Id,
         activity = Activity,
@@ -101,61 +99,79 @@ to_csv(Track) ->
 push_to_redmine(Track) ->
     #track{
         % id = Id,
-        %% TODO в xml идёт какой-тот activity_id, надо понять, как он выглядит у нас
-        activity = Activity,
+        %% TODO в xml идёт какой-то activity_id, надо понять, как он выглядит у нас
+        activity = {ActivityID, _Activity},
         state = State,
         task = Task,
         timestamp_begin = TsBegin,
         timestamp_end = TsEnd,
         desc = Desc
     } = Track,
-    RedmineInstance = "red.eltex.loc/time_entries.xml",
+    %% TODO пересилить в параметры
+    % RedmineInstance = "red.eltex.loc/time_entries.xml",
+    {ok, UserId} = application:get_env(redmine_tracker, user_id),
+    % ApiKey = "ce4d44991a201e363762315353cf6d0311813455",
     TrackXml =
-        xmerl:export_simple(
-            [
-                {time_entry, [
-                    %% TODO надо добавить project_id в track, иначе - неоткуда брать
-                    %% TODO временно можно захардкодить SSW, потом сделать так, чтобы мы искали по имени и сейвили локально в бд
-                    {project_id, ["228"]},
-                    %% TODO надо добавить извлечение таски, либо закрепить в валидаторе так, чтобы был только номер задачи
-                    {issue_id, [erlang:binary_to_list(Task)]},
-                    %% TODO надо брать из конфига, но в эту функцию параметр должен попадать через аргумент
-                    {user_id, ["1337"]},
-                    {hours, [
-                        erlang:float_to_list(
-                            %% TODO вынести в отдельную функцию
-                            (calendar:datetime_to_gregorian_seconds(TsEnd) -
-                                calendar:datetime_to_gregorian_seconds(TsBegin)) /
-                                3600,
-                            [{decimals, 1}]
-                        )
-                    ]},
-                    {comments, [erlang:binary_to_list(Desc)]},
-                    {spent_on, [
-                        erlang:binary_to_list(
-                            erlang:hd(
-                                string:split(datetime_to_binary(TsBegin), <<" ">>)
+        lists:flatten(
+            xmerl:export_simple(
+                [
+                    {time_entry, [
+                        %% TODO надо добавить project_id в track, иначе - неоткуда брать
+                        %% TODO временно можно захардкодить SSW, потом сделать так, чтобы мы искали по имени и сейвили локально в бд
+                        % {project_id, ["ecss-10"]},
+                        {project_id, ["time-tracking"]},
+                        %% TODO надо добавить извлечение таски, либо закрепить в валидаторе так, чтобы был только номер задачи
+                        {issue_id, [erlang:binary_to_list(Task)]},
+                        {activity_id, [erlang:integer_to_list(ActivityID)]},
+                        %% TODO надо брать из конфига, но в эту функцию параметр должен попадать через аргумент,
+                        %% можно было бы через поле в сущности. Но приложение задумано как однопользовательское, поэтому и нет смысла хранить user_id
+                        {user_id, [erlang:integer_to_list(UserId)]},
+                        {hours, [
+                            erlang:float_to_list(
+                                %% TODO вынести в отдельную функцию
+                                (calendar:datetime_to_gregorian_seconds(TsEnd) -
+                                    calendar:datetime_to_gregorian_seconds(TsBegin)) /
+                                    3600,
+                                [{decimals, 1}]
                             )
-                        )
+                        ]},
+                        {comments, [erlang:binary_to_list(Desc)]},
+                        {spent_on, [
+                            erlang:binary_to_list(
+                                erlang:hd(
+                                    string:split(
+                                        datetime_to_binary(TsBegin), <<" ">>
+                                    )
+                                )
+                            )
+                        ]}
                     ]}
-                ]}
-            ],
-            xmerl_xml
+                ],
+                xmerl_xml
+            )
         ),
 
-    ?LOG_ERROR("~ts", [lists:flatten(TrackXml)]),
-    ok.
-    % case
-    %     httpc:request(
-    %         post,
-    %         {RedmineInstance, [], <<"application/xml">>, TrackXml},
-    %         HttpOptions = [],
-    %         Options = []
-    %     )
-    % of
-    %     {ok, _} -> ok;
-    %     {error, Reason} -> {error, Reason}
-    % end.
+    ?LOG_ERROR("~ts", [TrackXml]),
+
+    {ok, RedmineInstance} = application:get_env(redmine_tracker, redmine_instance),
+    erlang:display(RedmineInstance),
+    {ok, ApiKey} = application:get_env(redmine_tracker, api_key),
+    erlang:display(ApiKey),
+    case
+        httpc:request(
+            post,
+            {<<RedmineInstance/binary, "/time_entries.xml">>, [{"X-Redmine-API-Key", ApiKey}], "application/xml", TrackXml},
+            %% TODO пока доверяем сертификату
+            HttpOptions = [{ssl, [{verify, verify_none}]}],
+            Options = []
+        )
+    of
+        {ok, Resp} ->
+            ?LOG_DEBUG("Response:~p", [Resp]),
+            ok;
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 datetime_to_binary(DateTime) ->
     {{Y, Month, D}, {H, Min, S}} = DateTime,
