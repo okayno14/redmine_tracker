@@ -13,7 +13,7 @@
     %% создать рекорд из csv-строки
     %% from_csv
     to_csv/1,
-    push_to_redmine/1
+    push_to_redmine/4
     %% get
     %% set
     %% delete
@@ -94,9 +94,14 @@ to_csv(Track) ->
         StateBin/binary, ";"
     >>.
 
--spec push_to_redmine(Track :: track()) ->
+-spec push_to_redmine(
+    Track :: track(),
+    UserId :: pos_integer(),
+    RedmineInstance :: unicode:unicode_binary(),
+    ApiKey :: unicode:unicode_binary()
+) ->
     ok | {error, Reason :: term()}.
-push_to_redmine(Track) ->
+push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
     #track{
         % id = Id,
         %% TODO в xml идёт какой-то activity_id, надо понять, как он выглядит у нас
@@ -107,10 +112,6 @@ push_to_redmine(Track) ->
         timestamp_end = TsEnd,
         desc = Desc
     } = Track,
-    %% TODO пересилить в параметры
-    % RedmineInstance = "red.eltex.loc/time_entries.xml",
-    {ok, UserId} = application:get_env(redmine_tracker, user_id),
-    % ApiKey = "ce4d44991a201e363762315353cf6d0311813455",
     TrackXml =
         lists:flatten(
             xmerl:export_simple(
@@ -151,19 +152,22 @@ push_to_redmine(Track) ->
             )
         ),
 
-    ?LOG_ERROR("~ts", [TrackXml]),
+    ?LOG_DEBUG("Body:~ts", [TrackXml]),
 
-    {ok, RedmineInstance} = application:get_env(redmine_tracker, redmine_instance),
-    erlang:display(RedmineInstance),
-    {ok, ApiKey} = application:get_env(redmine_tracker, api_key),
-    erlang:display(ApiKey),
     case
         httpc:request(
             post,
-            {<<RedmineInstance/binary, "/time_entries.xml">>, [{"X-Redmine-API-Key", ApiKey}], "application/xml", TrackXml},
+            {
+                <<RedmineInstance/binary, "/time_entries.xml">>,
+                [{"X-Redmine-API-Key", ApiKey}],
+                "application/xml",
+                TrackXml
+            },
             %% TODO пока доверяем сертификату
-            HttpOptions = [{ssl, [{verify, verify_none}]}],
-            Options = []
+            _HttpOptions = [
+                {ssl, [{verify, verify_none}]}
+            ],
+            _Options = []
         )
     of
         {ok, Resp} ->
@@ -198,20 +202,85 @@ datetime_to_binary(DateTime) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-to_csv_test() ->
-    ?assertEqual(
-        <<"1,\"refs #228\",code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
-        track:to_csv(
-            track:new(
-                1,
-                code,
-                <<"refs #228">>,
-                {{2026, 02, 25}, {22, 42, 00}},
-                {{2026, 02, 25}, {22, 50, 00}},
-                <<"tested csv-export">>
-            )
-        )
-    ).
+% to_csv_test() ->
+%     ?assertEqual(
+%         <<"1,\"refs #228\",code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
+%         track:to_csv(
+%             track:new(
+%                 1,
+%                 code,
+%                 <<"refs #228">>,
+%                 {{2026, 02, 25}, {22, 42, 00}},
+%                 {{2026, 02, 25}, {22, 50, 00}},
+%                 <<"tested csv-export">>
+%             )
+%         )
+%     ).
+
+push_to_redmine_test_() ->
+    {foreach,
+        fun() -> meck:new(httpc) end,
+        fun(_) -> meck:unload(httpc) end,
+        [
+            fun() ->
+                meck:expect(
+                    httpc,
+                    request,
+                    fun(_, _, _, _) ->
+                        {ok, <<"ok">>}
+                    end
+                ),
+                track:push_to_redmine(
+                    track:new(
+                        _Id = 1,
+                        _Activity = {1, <<"Code">>},
+                        Task =  <<"239715">>,
+                        _TSBegin = {{2026, 02, 25}, {21, 50, 00}},
+                        _TSEnd = {{2026, 02, 25}, {22, 50, 00}},
+                        Desc = <<"tested redmine-push">>
+                    ),
+                    UserID = 1234,
+                    _RedmineInstance = <<"redmine.org">>,
+                    ApiKey = <<"fjiajfeijf">>
+                ),
+                ?assertEqual(
+                    post,
+                    meck:capture(last, httpc, request, ['_', '_', '_', '_'], 1)
+                ),
+                {Uri, Headers, ContentType, Body} =
+                meck:capture(last, httpc, request, ['_', '_', '_', '_'], 2),
+                ?assertEqual(<<"redmine.org/time_entries.xml">>, Uri),
+                ?assertEqual([{"X-Redmine-API-Key", ApiKey}], Headers),
+                ?assertEqual("application/xml", ContentType),
+                ?assert(string:equal(
+                    io_lib:format(
+                        "<?xml version=\"1.0\"?>"
+                        "<time_entry>"
+                            "<project_id>"
+                                "time-tracking"
+                            "</project_id>"
+                            "<issue_id>~ts</issue_id>"
+                            "<activity_id>"
+                                "1"
+                            "</activity_id>"
+                            "<user_id>~p</user_id>"
+                            "<hours>~p</hours>"
+                            "<comments>~ts</comments>"
+                            "<spent_on>~ts</spent_on>"
+                        "</time_entry>",
+                        [
+                            Task,
+                            UserID,
+                            1.0,
+                            Desc,
+                            "2026-02-25"
+                        ]
+                    ),
+                    Body
+                ))
+            end
+        ]
+    }.
 
 -endif.
 

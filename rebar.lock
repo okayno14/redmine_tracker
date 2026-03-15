@@ -1,1 +1,8 @@
-[].
+{"1.2.0",
+[{<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0}]}.
+[
+{pkg_hash,[
+ {<<"meck">>, <<"E65A3D84D7B418AFCB2C8EFDE2B5106A98EEFB7FE8E5F7E324FE9765122AEFA2">>}]},
+{pkg_hash_ext,[
+ {<<"meck">>, <<"0FDFBD4D4F9EB9251BA621F4740A6E450E2A7D0E5E07A37830C5CF632F2CA8BB">>}]}
+].
