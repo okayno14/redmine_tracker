@@ -70,7 +70,7 @@ new(Id, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
 to_csv(Track) ->
     #track{
         id = Id,
-        activity = Activity,
+        activity = {_ActivityID, Activity},
         state = State,
         task = Task,
         timestamp_begin = TsBegin,
@@ -78,7 +78,6 @@ to_csv(Track) ->
         desc = Desc
     } = Track,
     IDBin = erlang:integer_to_binary(Id),
-    ActivityBin = erlang:atom_to_binary(Activity),
     StateBin = erlang:atom_to_binary(State),
     TaskBin = Task,
     TsBeginBin = datetime_to_binary(TsBegin),
@@ -87,7 +86,7 @@ to_csv(Track) ->
     <<
         IDBin/binary, ",",
         "\"", TaskBin/binary, "\"", ",",
-        ActivityBin/binary,",",
+        Activity/binary,",",
         "\"", TsBeginBin/binary, "\"", ",",
         "\"", TsEndBin/binary, "\"", ",",
         "\"", DescBin/binary, "\"", ",",
@@ -202,20 +201,20 @@ datetime_to_binary(DateTime) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-% to_csv_test() ->
-%     ?assertEqual(
-%         <<"1,\"refs #228\",code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
-%         track:to_csv(
-%             track:new(
-%                 1,
-%                 code,
-%                 <<"refs #228">>,
-%                 {{2026, 02, 25}, {22, 42, 00}},
-%                 {{2026, 02, 25}, {22, 50, 00}},
-%                 <<"tested csv-export">>
-%             )
-%         )
-%     ).
+to_csv_test() ->
+    ?assertEqual(
+        <<"1,\"228\",Code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
+        track:to_csv(
+            track:new(
+                1,
+                {1, <<"Code">>},
+                <<"228">>,
+                {{2026, 02, 25}, {22, 42, 00}},
+                {{2026, 02, 25}, {22, 50, 00}},
+                <<"tested csv-export">>
+            )
+        )
+    ).
 
 push_to_redmine_test_() ->
     {foreach,
