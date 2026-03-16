@@ -10,10 +10,10 @@
     %% track
     %% обновить отметку окончания трекаинга
     %% end_track
-    %% создать рекорд из csv-строки
-    %% from_csv
+    from_csv/1,
     to_csv/1,
     push_to_redmine/4
+    %% db-операции
     %% get
     %% set
     %% delete
@@ -61,10 +61,48 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
         desc = Desc
     }.
 
+%% TODO Идея в том, что мы позволяем через конструкторы и парсеры создать кривой экземпляр
+%% но если была прошла валидация, то мы гарантируем, что инвариант соблюдается, а значит не будет ошибки при вызове других функций модуля
+%% validate
+
 %% начать трекать элемент по id
 %% track
 %% закончить трекать элемент по id
 %% end_track
+
+%%--------------------------------------------------------------------
+%% TODO сейчас читает только одну строчку. Надо сделать так, чтобы он читал сразу список csv-строк без валидации
+-spec from_csv(CSV :: binary()) ->
+    either:either({error, bad_csv}, Track :: track()).
+%%--------------------------------------------------------------------
+from_csv(CSV) ->
+    compose:compose(
+        [
+            fun(Either) ->
+                either:map(
+                    Either,
+                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                        %% TODO добавить конструктор со State, т.к. внутри csv поле содержится
+                        track:new(IDBin, ProjectID, {1, Activity}, TaskBin, TsBeginBin, TsEndBin, DescBin)
+                    end
+                )
+            end,
+            %% TODO добавить промежуточные функции для парсинга всех аргументов. Будем возвращать уникальную ошибку для каждого. Это не валидация, просто приведение к типу
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun
+                        (X = [_, _, _, _, _, _, _, _]) -> either:right(X);
+                        (_) -> either:left({error, bad_csv})
+                    end
+                )
+            end,
+            fun(Either) -> either:map(Either, fun(X) -> string:split(X, <<",">>, all) end) end,
+            fun(Either) -> either:map(Either, fun(X) -> string:trim(X, trailing, ";") end) end
+        ],
+        either:right(CSV)
+    ).
+%%--------------------------------------------------------------------
 
 %% экспортировать в csv-строку рекорд
 -spec to_csv(Track :: track()) ->

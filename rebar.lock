@@ -1,5 +1,9 @@
 {"1.2.0",
-[{<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0}]}.
+[{<<"erl_utils">>,
+  {git,"https://github.com/okayno14/erl_utils.git",
+       {ref,"1deb77aa9525e648d019115f32a634f82b5a8bc4"}},
+  0},
+ {<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0}]}.
 [
 {pkg_hash,[
  {<<"meck">>, <<"E65A3D84D7B418AFCB2C8EFDE2B5106A98EEFB7FE8E5F7E324FE9765122AEFA2">>}]},
