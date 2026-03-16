@@ -105,54 +105,6 @@ to_csv(Track) ->
 ) ->
     ok | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
-    #track{
-        project_id = ProjectID,
-        activity = {ActivityID, _Activity},
-        state = State,
-        task = Task,
-        timestamp_begin = TsBegin,
-        timestamp_end = TsEnd,
-        desc = Desc
-    } = Track,
-    TrackXml =
-        lists:flatten(
-            xmerl:export_simple(
-                [
-                    {time_entry, [
-                        {project_id, [erlang:binary_to_list(ProjectID)]},
-                        %% TODO надо добавить извлечение таски, либо закрепить в валидаторе так, чтобы был только номер задачи
-                        {issue_id, [erlang:binary_to_list(Task)]},
-                        {activity_id, [erlang:integer_to_list(ActivityID)]},
-                        %% TODO надо брать из конфига, но в эту функцию параметр должен попадать через аргумент,
-                        %% можно было бы через поле в сущности. Но приложение задумано как однопользовательское, поэтому и нет смысла хранить user_id
-                        {user_id, [erlang:integer_to_list(UserId)]},
-                        {hours, [
-                            erlang:float_to_list(
-                                %% TODO вынести в отдельную функцию
-                                (calendar:datetime_to_gregorian_seconds(TsEnd) -
-                                    calendar:datetime_to_gregorian_seconds(TsBegin)) /
-                                    3600,
-                                [{decimals, 1}]
-                            )
-                        ]},
-                        {comments, [erlang:binary_to_list(Desc)]},
-                        {spent_on, [
-                            erlang:binary_to_list(
-                                erlang:hd(
-                                    string:split(
-                                        datetime_to_binary(TsBegin), <<" ">>
-                                    )
-                                )
-                            )
-                        ]}
-                    ]}
-                ],
-                xmerl_xml
-            )
-        ),
-
-    ?LOG_DEBUG("Body:~ts", [TrackXml]),
-
     case
         httpc:request(
             post,
@@ -160,9 +112,8 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
                 <<RedmineInstance/binary, "/time_entries.xml">>,
                 [{"X-Redmine-API-Key", ApiKey}],
                 "application/xml",
-                TrackXml
+                to_xml(Track, UserId)
             },
-            %% TODO пока доверяем сертификату
             _HttpOptions = [
                 {ssl, [{verify, verify_none}]}
             ],
@@ -175,6 +126,48 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
         {error, Reason} ->
             {error, Reason}
     end.
+
+to_xml(Track, UserId) ->
+    #track{
+        project_id = ProjectID,
+        activity = {ActivityID, _Activity},
+        task = Task,
+        timestamp_begin = TsBegin,
+        timestamp_end = TsEnd,
+        desc = Desc
+    } = Track,
+    lists:flatten(
+        xmerl:export_simple(
+            [
+                {time_entry, [
+                    {project_id, [erlang:binary_to_list(ProjectID)]},
+                    {issue_id, [erlang:binary_to_list(Task)]},
+                    {activity_id, [erlang:integer_to_list(ActivityID)]},
+                    {user_id, [erlang:integer_to_list(UserId)]},
+                    {hours, [
+                        erlang:float_to_list(
+                            %% TODO вынести в отдельную функцию
+                            (calendar:datetime_to_gregorian_seconds(TsEnd) -
+                                calendar:datetime_to_gregorian_seconds(TsBegin)) /
+                                3600,
+                            [{decimals, 1}]
+                        )
+                    ]},
+                    {comments, [erlang:binary_to_list(Desc)]},
+                    {spent_on, [
+                        erlang:binary_to_list(
+                            erlang:hd(
+                                string:split(
+                                    datetime_to_binary(TsBegin), <<" ">>
+                                )
+                            )
+                        )
+                    ]}
+                ]}
+            ],
+            xmerl_xml
+        )
+    ).
 
 datetime_to_binary(DateTime) ->
     {{Y, Month, D}, {H, Min, S}} = DateTime,
@@ -204,17 +197,17 @@ datetime_to_binary(DateTime) ->
 to_csv_test() ->
     ?assertEqual(
         <<"1,\"Redmine Tracker\",\"228\",Code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
-           track:to_csv(
-                track:new(
-                    1,
-                    <<"Redmine Tracker">>,
-                    {1, <<"Code">>},
-                    <<"228">>,
-                    {{2026, 02, 25}, {22, 42, 00}},
-                    {{2026, 02, 25}, {22, 50, 00}},
-                    <<"tested csv-export">>
-                )
+        track:to_csv(
+            track:new(
+                1,
+                <<"Redmine Tracker">>,
+                {1, <<"Code">>},
+                <<"228">>,
+                {{2026, 02, 25}, {22, 42, 00}},
+                {{2026, 02, 25}, {22, 50, 00}},
+                <<"tested csv-export">>
             )
+        )
     ).
 
 push_to_redmine_test_() ->
