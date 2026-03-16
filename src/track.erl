@@ -145,13 +145,7 @@ to_xml(Track, UserId) ->
                     {activity_id, [erlang:integer_to_list(ActivityID)]},
                     {user_id, [erlang:integer_to_list(UserId)]},
                     {hours, [
-                        erlang:float_to_list(
-                            %% TODO вынести в отдельную функцию
-                            (calendar:datetime_to_gregorian_seconds(TsEnd) -
-                                calendar:datetime_to_gregorian_seconds(TsBegin)) /
-                                3600,
-                            [{decimals, 1}]
-                        )
+                        erlang:float_to_list(seconds(TsBegin, TsEnd), [{decimals, 1}])
                     ]},
                     {comments, [erlang:binary_to_list(Desc)]},
                     {spent_on, [
@@ -168,6 +162,12 @@ to_xml(Track, UserId) ->
             xmerl_xml
         )
     ).
+
+-spec seconds(TsBegin :: calendar:datetime(), TsEnd :: calendar:datetime()) ->
+    Seconds :: float().
+seconds(TsBegin, TsEnd) ->
+    (calendar:datetime_to_gregorian_seconds(TsEnd) -
+        calendar:datetime_to_gregorian_seconds(TsBegin)) / 3600.
 
 datetime_to_binary(DateTime) ->
     {{Y, Month, D}, {H, Min, S}} = DateTime,
