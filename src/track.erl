@@ -3,8 +3,8 @@
 -include_lib("kernel/include/logger.hrl").
 
 -export([
-    new/4,
-    new/6,
+    new/5,
+    new/7,
     %% validate
     %% создать рекорд, положить в базу
     %% track
@@ -21,6 +21,7 @@
 
 -record(track, {
     id :: pos_integer(),
+    project_id :: unicode:unicode_binary(),
     activity :: {ActivityID :: pos_integer(), Activity :: binary()},
     %% TODO вынести в тип
     state :: tracking | finished,
@@ -36,21 +37,22 @@
 
 -opaque track() :: #track{}.
 
-new(Id, Activity, Task, Desc) when is_binary(Activity) ->
+new(Id, ProjectID, Activity, Task, Desc) when is_binary(Activity) ->
     {ok, Activities} = application:get_env(redmine_tracker, activities),
     Activity2 =
     case maps:get(Activity, Activities, not_found) of
         not_found -> {error, activity_not_found};
         ActivityID -> {ActivityID, Activity}
     end,
-    new(Id, Activity2, Task, Desc);
-new(Id, Activity = {_, _}, Task, Desc) ->
+    new(Id, ProjectID, Activity2, Task, Desc);
+new(Id, ProjectID, Activity = {_, _}, Task, Desc) ->
     T1 = calendar:universal_time(),
-    new(Id, Activity, Task, T1, T1, Desc).
+    new(Id, ProjectID, Activity, Task, T1, T1, Desc).
 
-new(Id, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
+new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
     #track{
         id = Id,
+        project_id = ProjectID,
         activity = Activity,
         state = tracking,
         task = Task,
@@ -70,6 +72,7 @@ new(Id, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
 to_csv(Track) ->
     #track{
         id = Id,
+        project_id = ProjectID,
         activity = {_ActivityID, Activity},
         state = State,
         task = Task,
@@ -85,6 +88,7 @@ to_csv(Track) ->
     DescBin = Desc,
     <<
         IDBin/binary, ",",
+        "\"", ProjectID/binary, "\"", ",",
         "\"", TaskBin/binary, "\"", ",",
         Activity/binary,",",
         "\"", TsBeginBin/binary, "\"", ",",
@@ -102,8 +106,7 @@ to_csv(Track) ->
     ok | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
     #track{
-        % id = Id,
-        %% TODO в xml идёт какой-то activity_id, надо понять, как он выглядит у нас
+        project_id = ProjectID,
         activity = {ActivityID, _Activity},
         state = State,
         task = Task,
@@ -116,10 +119,7 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
             xmerl:export_simple(
                 [
                     {time_entry, [
-                        %% TODO надо добавить project_id в track, иначе - неоткуда брать
-                        %% TODO временно можно захардкодить SSW, потом сделать так, чтобы мы искали по имени и сейвили локально в бд
-                        % {project_id, ["ecss-10"]},
-                        {project_id, ["time-tracking"]},
+                        {project_id, [erlang:binary_to_list(ProjectID)]},
                         %% TODO надо добавить извлечение таски, либо закрепить в валидаторе так, чтобы был только номер задачи
                         {issue_id, [erlang:binary_to_list(Task)]},
                         {activity_id, [erlang:integer_to_list(ActivityID)]},
@@ -203,17 +203,18 @@ datetime_to_binary(DateTime) ->
 
 to_csv_test() ->
     ?assertEqual(
-        <<"1,\"228\",Code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
-        track:to_csv(
-            track:new(
-                1,
-                {1, <<"Code">>},
-                <<"228">>,
-                {{2026, 02, 25}, {22, 42, 00}},
-                {{2026, 02, 25}, {22, 50, 00}},
-                <<"tested csv-export">>
+        <<"1,\"Redmine Tracker\",\"228\",Code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
+           track:to_csv(
+                track:new(
+                    1,
+                    <<"Redmine Tracker">>,
+                    {1, <<"Code">>},
+                    <<"228">>,
+                    {{2026, 02, 25}, {22, 42, 00}},
+                    {{2026, 02, 25}, {22, 50, 00}},
+                    <<"tested csv-export">>
+                )
             )
-        )
     ).
 
 push_to_redmine_test_() ->
@@ -232,6 +233,7 @@ push_to_redmine_test_() ->
                 track:push_to_redmine(
                     track:new(
                         _Id = 1,
+                        ProjectID = <<"Redmine Tracker">>,
                         _Activity = {1, <<"Code">>},
                         Task =  <<"239715">>,
                         _TSBegin = {{2026, 02, 25}, {21, 50, 00}},
@@ -255,9 +257,7 @@ push_to_redmine_test_() ->
                     io_lib:format(
                         "<?xml version=\"1.0\"?>"
                         "<time_entry>"
-                            "<project_id>"
-                                "time-tracking"
-                            "</project_id>"
+                            "<project_id>~ts</project_id>"
                             "<issue_id>~ts</issue_id>"
                             "<activity_id>"
                                 "1"
@@ -268,6 +268,7 @@ push_to_redmine_test_() ->
                             "<spent_on>~ts</spent_on>"
                         "</time_entry>",
                         [
+                            ProjectID,
                             Task,
                             UserID,
                             1.0,
