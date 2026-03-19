@@ -22,7 +22,7 @@
 -record(track, {
     id :: pos_integer(),
     project_id :: unicode:unicode_binary(),
-    activity :: {ActivityID :: pos_integer(), Activity :: binary()},
+    activity :: {ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()},
     %% TODO вынести в тип
     state :: tracking | finished,
     task :: unicode:unicode_binary(),
@@ -37,18 +37,43 @@
 
 -opaque track() :: #track{}.
 
+%% TODO переименовать в make? Чтобы не было путаницы между конструктором и такими композициями
+-spec new(
+    Id :: pos_integer(),
+    ProjectID :: unicode:unicode_binary(),
+    ActivityDesc ::
+        unicode:unicode_binary()
+        | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()},
+    Task :: unicode:unicode_binary(),
+    Desc :: unicode:unicode_binary()
+) ->
+    {error, activity_not_found} | track().
 new(Id, ProjectID, Activity, Task, Desc) when is_binary(Activity) ->
     {ok, Activities} = application:get_env(redmine_tracker, activities),
-    Activity2 =
+    %% TODO заменить на вызов find_acivity_by_desc/1
     case maps:get(Activity, Activities, not_found) of
-        not_found -> {error, activity_not_found};
-        ActivityID -> {ActivityID, Activity}
-    end,
-    new(Id, ProjectID, Activity2, Task, Desc);
+        not_found ->
+            {error, activity_not_found};
+        ActivityID ->
+            %% TODO может сдублировать код? Не нравятся эти прыжки по клаузам, обычно это потом тяжёло читать
+            new(Id, ProjectID, {ActivityID, Activity}, Task, Desc)
+    end;
 new(Id, ProjectID, Activity = {_, _}, Task, Desc) ->
     T1 = calendar:universal_time(),
     new(Id, ProjectID, Activity, Task, T1, T1, Desc).
 
+-spec new(
+    Id :: pos_integer(),
+    ProjectID :: unicode:unicode_binary(),
+    Activity :: {
+        ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()
+    },
+    Task :: unicode:unicode_binary(),
+    TsBegin :: calendar:datetime(),
+    TsEnd :: calendar:datetime(),
+    Desc :: unicode:unicode_binary()
+) ->
+    track().
 new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
     #track{
         id = Id,
@@ -81,9 +106,56 @@ from_csv(CSV) ->
             fun(Either) ->
                 either:map(
                     Either,
-                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        %% TODO добавить конструктор со State, т.к. внутри csv поле содержится
-                        track:new(IDBin, ProjectID, {1, Activity}, TaskBin, TsBeginBin, TsEndBin, DescBin)
+                    fun([
+                        IDBin,
+                        ProjectID,
+                        TaskBin,
+                        Activity,
+                        TsBeginBin,
+                        TsEndBin,
+                        DescBin,
+                        StateBin
+                    ]) ->
+                        track:new(
+                            erlang:binary_to_integer(IDBin),
+                            ProjectID,
+                            Activity,
+                            TaskBin,
+                            binary_to_datetime(TsBeginBin),
+                            binary_to_datetime(TsEndBin),
+                            DescBin
+                        )
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun([
+                        IDBin,
+                        ProjectID,
+                        TaskBin,
+                        ActivityDesc,
+                        TsBeginBin,
+                        TsEndBin,
+                        DescBin,
+                        StateBin
+                    ]) ->
+                        case find_acivity_by_desc(ActivityDesc) of
+                            {error, not_found} ->
+                                either:left({error,activity,{error,not_found}});
+                            Activity = {_, _} ->
+                                either:right([
+                                    IDBin,
+                                    ProjectID,
+                                    TaskBin,
+                                    Activity,
+                                    TsBeginBin,
+                                    TsEndBin,
+                                    DescBin,
+                                    StateBin
+                                ])
+                        end
                     end
                 )
             end,
@@ -224,6 +296,36 @@ datetime_to_binary(DateTime) ->
             FormatNumber(S)
         ])
     ).
+
+binary_to_datetime(DateTimeBin) ->
+    [DateBin, TimeBin] = string:split(string:trim(DateTimeBin, both, "\""), <<" ">>, all),
+    Date = erlang:list_to_tuple(
+        lists:map(
+            fun erlang:binary_to_integer/1, string:split(DateBin, <<"-">>, all)
+        )
+    ),
+    Time = erlang:list_to_tuple(
+        lists:map(
+            fun erlang:binary_to_integer/1, string:split(TimeBin, <<":">>, all)
+        )
+    ),
+    {Date, Time}.
+
+
+%%%===================================================================
+%%% app_db
+%%%===================================================================
+
+-spec find_acivity_by_desc(ActivityDesc :: unicode:unicode_binary()) ->
+    {error, not_found}
+    %% TODO вынести в отдельный тип, а то часто приходится копипастить
+    | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()}.
+find_acivity_by_desc(ActivityDesc) ->
+    {ok, Activities} = application:get_env(redmine_tracker, activities),
+    case maps:get(ActivityDesc, Activities, not_found) of
+        not_found -> {error, not_found};
+        ActivityID -> {ActivityID, ActivityDesc}
+    end.
 
 %%%===================================================================
 %%% Tests
