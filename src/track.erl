@@ -97,8 +97,11 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
 
 %%--------------------------------------------------------------------
 %% TODO сейчас читает только одну строчку. Надо сделать так, чтобы он читал сразу список csv-строк без валидации
+%% TODO надо добавить парсинг стейта
 -spec from_csv(CSV :: binary()) ->
-    either:either({error, bad_csv}, Track :: track()).
+    either:either(
+        {error, bad_csv} | {error, activity, {error, not_found}}, Track :: track()
+    ).
 %%--------------------------------------------------------------------
 from_csv(CSV) ->
     compose:compose(
@@ -106,16 +109,18 @@ from_csv(CSV) ->
             fun(Either) ->
                 either:map(
                     Either,
-                    fun([
-                        IDBin,
-                        ProjectID,
-                        TaskBin,
-                        Activity,
-                        TsBeginBin,
-                        TsEndBin,
-                        DescBin,
-                        StateBin
-                    ]) ->
+                    fun(
+                        [
+                            IDBin,
+                            ProjectID,
+                            TaskBin,
+                            Activity,
+                            TsBeginBin,
+                            TsEndBin,
+                            DescBin,
+                            StateBin
+                        ]
+                    ) ->
                         track:new(
                             erlang:binary_to_integer(IDBin),
                             ProjectID,
@@ -131,19 +136,21 @@ from_csv(CSV) ->
             fun(Either) ->
                 either:flatmap(
                     Either,
-                    fun([
-                        IDBin,
-                        ProjectID,
-                        TaskBin,
-                        ActivityDesc,
-                        TsBeginBin,
-                        TsEndBin,
-                        DescBin,
-                        StateBin
-                    ]) ->
+                    fun(
+                        [
+                            IDBin,
+                            ProjectID,
+                            TaskBin,
+                            ActivityDesc,
+                            TsBeginBin,
+                            TsEndBin,
+                            DescBin,
+                            StateBin
+                        ]
+                    ) ->
                         case find_acivity_by_desc(ActivityDesc) of
                             {error, not_found} ->
-                                either:left({error,activity,{error,not_found}});
+                                either:left({error, activity, {error, not_found}});
                             Activity = {_, _} ->
                                 either:right([
                                     IDBin,
@@ -169,8 +176,12 @@ from_csv(CSV) ->
                     end
                 )
             end,
-            fun(Either) -> either:map(Either, fun(X) -> string:split(X, <<",">>, all) end) end,
-            fun(Either) -> either:map(Either, fun(X) -> string:trim(X, trailing, ";") end) end
+            fun(Either) ->
+                either:map(Either, fun(X) -> string:split(X, <<",">>, all) end)
+            end,
+            fun(Either) ->
+                either:map(Either, fun(X) -> string:trim(X, trailing, ";") end)
+            end
         ],
         either:right(CSV)
     ).
