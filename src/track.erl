@@ -98,76 +98,93 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
 %%--------------------------------------------------------------------
 %% TODO сейчас читает только одну строчку. Надо сделать так, чтобы он читал сразу список csv-строк без валидации
 %% TODO надо добавить парсинг стейта
--spec from_csv(CSV :: binary()) ->
-    either:either(
-        {error, bad_csv} | {error, activity, {error, not_found}}, Track :: track()
-    ).
+% -spec from_csv(CSV :: binary()) ->
+%     either:either(
+%         {error, bad_csv} | {error, activity, {error, not_found}}, Track :: track()
+%     ).
 %%--------------------------------------------------------------------
 from_csv(CSV) ->
     compose:compose(
         [
             fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
                 either:map(
                     Either,
-                    fun(
-                        [
-                            IDBin,
-                            ProjectID,
-                            TaskBin,
-                            Activity,
-                            TsBeginBin,
-                            TsEndBin,
-                            DescBin,
-                            StateBin
-                        ]
-                    ) ->
-                        track:new(
-                            erlang:binary_to_integer(IDBin),
-                            ProjectID,
-                            Activity,
-                            TaskBin,
-                            binary_to_datetime(TsBeginBin),
-                            binary_to_datetime(TsEndBin),
-                            DescBin
-                        )
+                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                    track:new(
+                        IDBin,
+                        ProjectID,
+                        Activity,
+                        TaskBin,
+                        TsBeginBin,
+                        TsEndBin,
+                        DescBin
+                    )
                     end
                 )
             end,
             fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
                 either:flatmap(
                     Either,
-                    fun(
-                        [
-                            IDBin,
-                            ProjectID,
-                            TaskBin,
-                            ActivityDesc,
-                            TsBeginBin,
-                            TsEndBin,
-                            DescBin,
-                            StateBin
-                        ]
-                    ) ->
+                    %% TODO переименовать с Bin на просто ID
+                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                        X = binary_to_datetime_2(TsEndBin),
+                        case either:is_left(X) of
+                            true -> either:left({error, timestamp_end, either:extract(X)});
+                            false -> either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, either:extract(X), DescBin, StateBin])
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
+                either:flatmap(
+                    Either,
+                    %% TODO переименовать с Bin на просто ID
+                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                        X = binary_to_datetime_2(TsBeginBin),
+                        case either:is_left(X) of
+                            true -> either:left({error, timestamp_begin, either:extract(X)});
+                            false -> either:right([IDBin, ProjectID, TaskBin, Activity, either:extract(X), TsEndBin, DescBin, StateBin])
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
+                either:flatmap(
+                    Either,
+                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                        try
+                            either:right([erlang:binary_to_integer(IDBin), ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
+                        catch
+                            Class:Reason:StackTrace ->
+                                either:left({error, {id, <<"Id contains non-numeric symbols">>}})
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
+                either:flatmap(
+                    Either,
+                    fun([IDBin, ProjectID, TaskBin, ActivityDesc, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                        ?LOG_ERROR("ActivityDesc:~p", [ActivityDesc]),
                         case find_acivity_by_desc(ActivityDesc) of
                             {error, not_found} ->
+                                ?LOG_ERROR("f"),
                                 either:left({error, activity, {error, not_found}});
                             Activity = {_, _} ->
-                                either:right([
-                                    IDBin,
-                                    ProjectID,
-                                    TaskBin,
-                                    Activity,
-                                    TsBeginBin,
-                                    TsEndBin,
-                                    DescBin,
-                                    StateBin
-                                ])
+                                ?LOG_DEBUG("q"),
+                                either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
                         end
                     end
                 )
             end,
             %% TODO добавить промежуточные функции для парсинга всех аргументов. Будем возвращать уникальную ошибку для каждого. Это не валидация, просто приведение к типу
             fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
                 either:flatmap(
                     Either,
                     fun
@@ -177,9 +194,11 @@ from_csv(CSV) ->
                 )
             end,
             fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
                 either:map(Either, fun(X) -> string:split(X, <<",">>, all) end)
             end,
             fun(Either) ->
+                ?LOG_ERROR("Either:~p", [Either]),
                 either:map(Either, fun(X) -> string:trim(X, trailing, ";") end)
             end
         ],
@@ -322,6 +341,112 @@ binary_to_datetime(DateTimeBin) ->
     ),
     {Date, Time}.
 
+-spec binary_to_datetime_2(DateTimeBin :: unicode:unicode_binary()) ->
+    either:either({error, {bad_csv, Msg :: binary()}}, calendar:datetime()).
+binary_to_datetime_2(DateTimeBin) ->
+    compose:compose(
+        [
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun({_Date, Time}) ->
+                        try
+                            either:right(
+                                {_Date,
+                                    erlang:list_to_tuple(
+                                        lists:map(
+                                            fun erlang:binary_to_integer/1, Time
+                                        )
+                                    )}
+                            )
+                        catch
+                            _:_:_ ->
+                                either:left(
+                                    {error,
+                                        {bad_csv,
+                                            <<"Time contains non-numeric symbols">>}}
+                                )
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun({_Date, Time}) ->
+                        case string:split(Time, <<":">>, all) of
+                            L = [H, M, S] ->
+                                either:right({_Date, L});
+                            _ ->
+                                either:left(
+                                    {error, {bad_csv, <<"Failed to split time">>}}
+                                )
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun({Date, _Time}) ->
+                        try
+                            either:right({
+                                erlang:list_to_tuple(
+                                    lists:map(fun erlang:binary_to_integer/1, Date)
+                                ),
+                                _Time
+                            })
+                        catch
+                            _:_:_ ->
+                                either:left(
+                                    {error,
+                                        {bad_csv,
+                                            <<"Date contains non-numeric symbols">>}}
+                                )
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun({Date, _Time}) ->
+                        case string:split(Date, <<"-">>, all) of
+                            L = [Y, M, D] ->
+                                either:right({L, _Time});
+                            _ ->
+                                either:left(
+                                    {error, {bad_csv, <<"Failed to split date">>}}
+                                )
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun(X) ->
+                        case
+                            string:split(
+                                string:trim(DateTimeBin, both, "\""), <<" ">>, all
+                            )
+                        of
+                            [DateBin, TimeBin] ->
+                                either:right({DateBin, TimeBin});
+                            _ ->
+                                either:left(
+                                    {error,
+                                        {bad_csv,
+                                            <<"Failed to split date and time">>}}
+                                )
+                        end
+                    end
+                )
+            end
+        ],
+        either:right(DateTimeBin)
+    ).
+
 
 %%%===================================================================
 %%% app_db
@@ -333,6 +458,7 @@ binary_to_datetime(DateTimeBin) ->
     | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()}.
 find_acivity_by_desc(ActivityDesc) ->
     {ok, Activities} = application:get_env(redmine_tracker, activities),
+    ?LOG_ERROR("~p", [Activities]),
     case maps:get(ActivityDesc, Activities, not_found) of
         not_found -> {error, not_found};
         ActivityID -> {ActivityID, ActivityDesc}
@@ -359,6 +485,44 @@ to_csv_test() ->
                 <<"tested csv-export">>
             )
         )
+    ).
+
+%% TODO написать нормальный тест для проверки
+%% TODO сделать тестовый конфиг для логгера
+from_csv_test() ->
+    application:load(redmine_tracker),
+    application:set_env(
+        redmine_tracker,
+        activities,
+        #{
+            <<"Design">> => 8,
+            <<"Code">> => 9,
+            <<"Code Review">> => 90,
+            <<"Analysis">> => 96,
+            <<"Discuss">> => 10,
+            <<"Test">> => 11,
+            <<"Management">> => 12,
+            <<"Documentation">> => 13,
+            <<"Support">> => 14
+        }
+    ),
+    ?debugFmt(
+        "~p\n",
+        [
+            track:from_csv(
+                track:to_csv(
+                    track:new(
+                        1,
+                        <<"Redmine Tracker">>,
+                        {1, <<"Code">>},
+                        <<"228">>,
+                        {{2026, 02, 25}, {22, 42, 00}},
+                        {{2026, 02, 25}, {22, 50, 00}},
+                        <<"tested csv-export">>
+                    )
+                )
+            )
+        ]
     ).
 
 push_to_redmine_test_() ->
