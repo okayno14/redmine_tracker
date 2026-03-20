@@ -5,12 +5,14 @@
 -export([
     new/5,
     new/7,
+    new/8,
     %% validate
     %% создать рекорд, положить в базу
     %% track
     %% обновить отметку окончания трекаинга
     %% end_track
     from_csv/1,
+    from_csv_all/1,
     to_csv/1,
     push_to_redmine/4
     %% db-операции
@@ -75,11 +77,27 @@ new(Id, ProjectID, Activity = {_, _}, Task, Desc) ->
 ) ->
     track().
 new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
+    new(Id, ProjectID, Activity, Task, TsBegin, TsEnd, Desc, tracking).
+
+-spec new(
+    Id :: pos_integer(),
+    ProjectID :: unicode:unicode_binary(),
+    Activity :: {
+        ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()
+    },
+    Task :: unicode:unicode_binary(),
+    TsBegin :: calendar:datetime(),
+    TsEnd :: calendar:datetime(),
+    Desc :: unicode:unicode_binary(),
+    State :: tracking | finished
+) ->
+    track().
+new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
     #track{
         id = Id,
         project_id = ProjectID,
         activity = Activity,
-        state = tracking,
+        state = State,
         task = Task,
         timestamp_begin = TsBegin,
         timestamp_end = TsEnd,
@@ -103,28 +121,73 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
 %         {error, bad_csv} | {error, activity, {error, not_found}}, Track :: track()
 %     ).
 %%--------------------------------------------------------------------
+
+from_csv_all(CSV) ->
+    lists:foldl(
+        fun
+            (<<>>, Either) ->
+                either:map(Either, fun lists:reverse/1);
+            (Line, Either) ->
+                either:flatmap(
+                    Either,
+                    fun
+                        (Acc) ->
+                            Ret = from_csv(Line),
+                            case either:is_left(Ret) of
+                                true ->
+                                    either:left(
+                                        {error,
+                                            {bad_csv, Line},
+                                            either:extract(Ret)
+                                        }
+                                    );
+                                false ->
+                                    either:right(
+                                        [either:extract(Ret) | Acc]
+                                    )
+                            end
+                    end
+                )
+        end,
+        either:right([]),
+        string:split(CSV, <<"\n">>, all)
+    ).
+
 from_csv(CSV) ->
     compose:compose(
         [
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:map(
                     Either,
                     fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                    track:new(
-                        IDBin,
-                        ProjectID,
-                        Activity,
-                        TaskBin,
-                        TsBeginBin,
-                        TsEndBin,
-                        DescBin
-                    )
+                        track:new(
+                            IDBin,
+                            ProjectID,
+                            Activity,
+                            TaskBin,
+                            TsBeginBin,
+                            TsEndBin,
+                            DescBin,
+                            StateBin
+                        )
                     end
                 )
             end,
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
+                either:flatmap(
+                    Either,
+                    fun
+                        ([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
+                        when
+                            StateBin == <<"tracking">>; StateBin == <<"finished">>
+                        ->
+                            either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, erlang:binary_to_atom(StateBin)]);
+                        ([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
+                            either:left({error, state, {error, <<"State must be \"finished\" or \"tracking\"">>}})
+                    end
+                )
+            end,
+            fun(Either) ->
                 either:flatmap(
                     Either,
                     %% TODO переименовать с Bin на просто ID
@@ -138,7 +201,6 @@ from_csv(CSV) ->
                 )
             end,
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:flatmap(
                     Either,
                     %% TODO переименовать с Bin на просто ID
@@ -152,7 +214,6 @@ from_csv(CSV) ->
                 )
             end,
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:flatmap(
                     Either,
                     fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
@@ -166,14 +227,11 @@ from_csv(CSV) ->
                 )
             end,
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:flatmap(
                     Either,
                     fun([IDBin, ProjectID, TaskBin, ActivityDesc, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        ?LOG_ERROR("ActivityDesc:~p", [ActivityDesc]),
                         case find_acivity_by_desc(ActivityDesc) of
                             {error, not_found} ->
-                                ?LOG_ERROR("f"),
                                 either:left({error, activity, {error, not_found}});
                             Activity = {_, _} ->
                                 ?LOG_DEBUG("q"),
@@ -182,9 +240,7 @@ from_csv(CSV) ->
                     end
                 )
             end,
-            %% TODO добавить промежуточные функции для парсинга всех аргументов. Будем возвращать уникальную ошибку для каждого. Это не валидация, просто приведение к типу
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:flatmap(
                     Either,
                     fun
@@ -194,11 +250,9 @@ from_csv(CSV) ->
                 )
             end,
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:map(Either, fun(X) -> string:split(X, <<",">>, all) end)
             end,
             fun(Either) ->
-                ?LOG_ERROR("Either:~p", [Either]),
                 either:map(Either, fun(X) -> string:trim(X, trailing, ";") end)
             end
         ],
@@ -428,7 +482,7 @@ binary_to_datetime_2(DateTimeBin) ->
                     fun(X) ->
                         case
                             string:split(
-                                string:trim(DateTimeBin, both, "\""), <<" ">>, all
+                                string:trim(X, both, "\""), <<" ">>, all
                             )
                         of
                             [DateBin, TimeBin] ->
@@ -458,7 +512,6 @@ binary_to_datetime_2(DateTimeBin) ->
     | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()}.
 find_acivity_by_desc(ActivityDesc) ->
     {ok, Activities} = application:get_env(redmine_tracker, activities),
-    ?LOG_ERROR("~p", [Activities]),
     case maps:get(ActivityDesc, Activities, not_found) of
         not_found -> {error, not_found};
         ActivityID -> {ActivityID, ActivityDesc}
@@ -518,7 +571,8 @@ from_csv_test() ->
                         <<"228">>,
                         {{2026, 02, 25}, {22, 42, 00}},
                         {{2026, 02, 25}, {22, 50, 00}},
-                        <<"tested csv-export">>
+                        <<"tested csv-export">>,
+                        finished
                     )
                 )
             )
