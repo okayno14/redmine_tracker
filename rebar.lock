@@ -1,7 +1,7 @@
 {"1.2.0",
 [{<<"erl_utils">>,
   {git,"https://github.com/okayno14/erl_utils.git",
-       {ref,"5f6016c9ab7bf9fc5881cc28d4a3fcf95a5f699e"}},
+       {ref,"2a86b9d1d74bf8578a58f29cb5cc105cc0fb5090"}},
   0},
  {<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0}]}.
 [
