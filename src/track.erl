@@ -153,6 +153,16 @@ from_csv_all(CSV) ->
         string:split(CSV, <<"\n">>, all)
     ).
 
+-spec from_csv(CSV :: unicode:unicode_binary()) ->
+    either:either(
+        {error, state, {error, Msg :: unicode:unicode_binary()}}
+        | {error, timestamp_end, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
+        | {error, timestamp_begin, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
+        | {error, {id, Msg :: unicode:unicode_binary()}}
+        | {error, activity, {error, not_found}}
+        | {error, {bad_csv, Msg :: unicode:unicode_binary()}},
+        track()
+    ).
 from_csv(CSV) ->
     compose:compose(
         [
@@ -245,7 +255,7 @@ from_csv(CSV) ->
                     Either,
                     fun
                         (X = [_, _, _, _, _, _, _, _]) -> either:right(X);
-                        (_) -> either:left({error, bad_csv})
+                        (_) -> either:left({error, {bad_csv, <<"Failed to split csv-line">>}})
                     end
                 )
             end,
@@ -396,7 +406,10 @@ binary_to_datetime(DateTimeBin) ->
     {Date, Time}.
 
 -spec binary_to_datetime_2(DateTimeBin :: unicode:unicode_binary()) ->
-    either:either({error, {bad_csv, Msg :: binary()}}, calendar:datetime()).
+    either:either(
+        {error, {bad_datetime, Msg :: unicode:unicode_binary()}},
+        calendar:datetime()
+    ).
 binary_to_datetime_2(DateTimeBin) ->
     compose:compose(
         [
@@ -417,7 +430,7 @@ binary_to_datetime_2(DateTimeBin) ->
                             _:_:_ ->
                                 either:left(
                                     {error,
-                                        {bad_csv,
+                                        {bad_datetime,
                                             <<"Time contains non-numeric symbols">>}}
                                 )
                         end
@@ -433,7 +446,7 @@ binary_to_datetime_2(DateTimeBin) ->
                                 either:right({_Date, L});
                             _ ->
                                 either:left(
-                                    {error, {bad_csv, <<"Failed to split time">>}}
+                                    {error, {bad_datetime, <<"Failed to split time">>}}
                                 )
                         end
                     end
@@ -454,7 +467,7 @@ binary_to_datetime_2(DateTimeBin) ->
                             _:_:_ ->
                                 either:left(
                                     {error,
-                                        {bad_csv,
+                                        {bad_datetime,
                                             <<"Date contains non-numeric symbols">>}}
                                 )
                         end
@@ -470,7 +483,7 @@ binary_to_datetime_2(DateTimeBin) ->
                                 either:right({L, _Time});
                             _ ->
                                 either:left(
-                                    {error, {bad_csv, <<"Failed to split date">>}}
+                                    {error, {bad_datetime, <<"Failed to split date">>}}
                                 )
                         end
                     end
@@ -490,7 +503,7 @@ binary_to_datetime_2(DateTimeBin) ->
                             _ ->
                                 either:left(
                                     {error,
-                                        {bad_csv,
+                                        {bad_datetime,
                                             <<"Failed to split date and time">>}}
                                 )
                         end
