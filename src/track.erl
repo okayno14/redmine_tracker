@@ -21,6 +21,9 @@
     %% delete
 ]).
 
+-eqwalizer({nowarn_function, from_csv_all/1}).
+-eqwalizer({nowarn_function, push_to_redmine_test_/0}).
+
 -record(track, {
     id :: pos_integer(),
     project_id :: unicode:unicode_binary(),
@@ -51,12 +54,12 @@
 ) ->
     {error, activity_not_found} | track().
 new(Id, ProjectID, Activity, Task, Desc) when is_binary(Activity) ->
-    {ok, Activities} = application:get_env(redmine_tracker, activities),
+    {ok, Activities = #{}} = application:get_env(redmine_tracker, activities),
     %% TODO заменить на вызов find_acivity_by_desc/1
     case maps:get(Activity, Activities, not_found) of
         not_found ->
             {error, activity_not_found};
-        ActivityID ->
+        ActivityID when is_number(ActivityID) ->
             %% TODO может сдублировать код? Не нравятся эти прыжки по клаузам, обычно это потом тяжёло читать
             new(Id, ProjectID, {ActivityID, Activity}, Task, Desc)
     end;
@@ -114,20 +117,19 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
 %% end_track
 
 %%--------------------------------------------------------------------
-%% TODO сейчас читает только одну строчку. Надо сделать так, чтобы он читал сразу список csv-строк без валидации
-%% TODO надо добавить парсинг стейта
-% -spec from_csv(CSV :: binary()) ->
-%     either:either(
-%         {error, bad_csv} | {error, activity, {error, not_found}}, Track :: track()
-%     ).
+-spec from_csv_all(CSV :: unicode:unicode_binary()) ->
+    either:either(
+        {error, bad_csv}
+        | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()},
+        track()
+    ).
 %%--------------------------------------------------------------------
-
 from_csv_all(CSV) ->
     lists:foldl(
         fun
             (<<>>, Either) ->
                 either:map(Either, fun lists:reverse/1);
-            (Line, Either) ->
+            (Line, Either) when is_binary(Line) ->
                 either:flatmap(
                     Either,
                     fun
@@ -152,17 +154,22 @@ from_csv_all(CSV) ->
         either:right([]),
         string:split(CSV, <<"\n">>, all)
     ).
+%%--------------------------------------------------------------------
+
+
+-type from_csv_err() ::
+    {error, state, {error, Msg :: unicode:unicode_binary()}}
+    | {error, timestamp_end, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
+    | {error, timestamp_begin, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
+    | {error, {id, Msg :: unicode:unicode_binary()}}
+    | {error, activity, {error, not_found}}
+    | {error, {bad_csv, Msg :: unicode:unicode_binary()}}.
 
 -spec from_csv(CSV :: unicode:unicode_binary()) ->
     either:either(
-        {error, state, {error, Msg :: unicode:unicode_binary()}}
-        | {error, timestamp_end, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
-        | {error, timestamp_begin, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
-        | {error, {id, Msg :: unicode:unicode_binary()}}
-        | {error, activity, {error, not_found}}
-        | {error, {bad_csv, Msg :: unicode:unicode_binary()}},
-        track()
-    ).
+            from_csv_err(),
+            track()
+        ).
 from_csv(CSV) ->
     compose:compose(
         [
@@ -354,11 +361,11 @@ to_xml(Track, UserId) ->
                     {comments, [erlang:binary_to_list(Desc)]},
                     {spent_on, [
                         erlang:binary_to_list(
-                            erlang:hd(
-                                string:split(
-                                    datetime_to_binary(TsBegin), <<" ">>
-                                )
-                            )
+                            begin
+                                [X | _] = string:split(datetime_to_binary(TsBegin), <<" ">>),
+                                true = is_binary(X),
+                                X
+                            end
                         )
                     ]}
                 ]}
@@ -422,7 +429,7 @@ binary_to_datetime_2(DateTimeBin) ->
                                 {_Date,
                                     erlang:list_to_tuple(
                                         lists:map(
-                                            fun erlang:binary_to_integer/1, Time
+                                            fun(X) when is_binary(X) -> erlang:binary_to_integer(X) end, Time
                                         )
                                     )}
                             )
@@ -459,7 +466,7 @@ binary_to_datetime_2(DateTimeBin) ->
                         try
                             either:right({
                                 erlang:list_to_tuple(
-                                    lists:map(fun erlang:binary_to_integer/1, Date)
+                                    lists:map(fun(X) when is_binary(X) -> erlang:binary_to_integer(X) end, Date)
                                 ),
                                 _Time
                             })
@@ -524,10 +531,10 @@ binary_to_datetime_2(DateTimeBin) ->
     %% TODO вынести в отдельный тип, а то часто приходится копипастить
     | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()}.
 find_acivity_by_desc(ActivityDesc) ->
-    {ok, Activities} = application:get_env(redmine_tracker, activities),
+    {ok, Activities = #{}} = application:get_env(redmine_tracker, activities),
     case maps:get(ActivityDesc, Activities, not_found) of
         not_found -> {error, not_found};
-        ActivityID -> {ActivityID, ActivityDesc}
+        ActivityID when is_number(ActivityID) -> {ActivityID, ActivityDesc}
     end.
 
 %%%===================================================================
