@@ -398,20 +398,6 @@ datetime_to_binary(DateTime) ->
         ])
     ).
 
-binary_to_datetime(DateTimeBin) ->
-    [DateBin, TimeBin] = string:split(string:trim(DateTimeBin, both, "\""), <<" ">>, all),
-    Date = erlang:list_to_tuple(
-        lists:map(
-            fun erlang:binary_to_integer/1, string:split(DateBin, <<"-">>, all)
-        )
-    ),
-    Time = erlang:list_to_tuple(
-        lists:map(
-            fun erlang:binary_to_integer/1, string:split(TimeBin, <<":">>, all)
-        )
-    ),
-    {Date, Time}.
-
 -spec binary_to_datetime_2(DateTimeBin :: unicode:unicode_binary()) ->
     either:either(
         {error, {bad_datetime, Msg :: unicode:unicode_binary()}},
