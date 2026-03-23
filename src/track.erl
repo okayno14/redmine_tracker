@@ -257,6 +257,13 @@ from_csv(CSV) ->
                     end
                 )
             end,
+			%% Any csv field can be enclosed in double quotes
+			fun(Either) ->
+				either:map(
+					Either,
+					fun(L) -> lists:map(fun(X) -> string:trim(X, both, "\"") end, L) end
+				)
+			end,
             fun(Either) ->
                 either:flatmap(
                     Either,
