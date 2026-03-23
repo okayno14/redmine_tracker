@@ -323,6 +323,9 @@ to_csv(Track) ->
 ) ->
     ok | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
+	%% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
+	XML = unicode:characters_to_binary(to_xml(Track, UserId)),
+	true = is_binary(XML),
     case
         httpc:request(
             post,
@@ -330,7 +333,7 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
                 <<RedmineInstance/binary, "/time_entries.xml">>,
                 [{"X-Redmine-API-Key", ApiKey}],
                 "application/xml",
-                to_xml(Track, UserId)
+                XML
             },
             _HttpOptions = [
                 {ssl, [{verify, verify_none}]}
@@ -358,6 +361,7 @@ to_xml(Track, UserId) ->
         xmerl:export_simple(
             [
                 {time_entry, [
+					%% TODO переделать все конвертации строк/бинарей на unicode-модуль
                     {project_id, [erlang:binary_to_list(ProjectID)]},
                     {issue_id, [erlang:binary_to_list(Task)]},
                     {activity_id, [erlang:integer_to_list(ActivityID)]},
@@ -365,7 +369,7 @@ to_xml(Track, UserId) ->
                     {hours, [
                         erlang:float_to_list(seconds(TsBegin, TsEnd), [{decimals, 1}])
                     ]},
-                    {comments, [erlang:binary_to_list(Desc)]},
+                    {comments, [unicode:characters_to_list(Desc)]},
                     {spent_on, [
                         erlang:binary_to_list(
                             begin
