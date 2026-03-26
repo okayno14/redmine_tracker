@@ -2,11 +2,24 @@
 
 -include_lib("kernel/include/logger.hrl").
 
+-define(
+    R2L(Record, RecordName),
+    [
+        {Field, element(Pos, Record)}
+        || {Pos, Field} <-
+            lists:zip(
+                lists:seq(2, record_info(size, RecordName)),
+                record_info(fields, RecordName)
+            )
+    ]
+).
+
 %% clean functions
 -export([
     new/5,
     new/7,
     new/8,
+    validate/1,
     %% создать рекорд
     %% track
     %% обновить отметку окончания трекаинга
@@ -26,6 +39,7 @@
 ]).
 
 -eqwalizer({nowarn_function, from_csv_all/1}).
+-eqwalizer({nowarn_function, validate/1}).
 -eqwalizer({nowarn_function, push_to_redmine_test_/0}).
 
 -record(track, {
@@ -111,9 +125,292 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
         desc = Desc
     }.
 
-%% TODO Идея в том, что мы позволяем через конструкторы и парсеры создать кривой экземпляр
-%% но если была прошла валидация, то мы гарантируем, что инвариант соблюдается, а значит не будет ошибки при вызове других функций модуля
-%% validate
+%%--------------------------------------------------------------------
+-spec validate(Track :: track()) ->
+    ErrorList :: [
+        validate_id_err()
+        | validate_project_id_err()
+        | validate_activity_err()
+        | validate_state_err()
+        | validate_task_err()
+        | validate_timestamps_err()
+        | validate_desc_err()
+    ].
+%%--------------------------------------------------------------------
+validate(Track = #track{}) ->
+    L = ?R2L(Track, track),
+    ?LOG_DEBUG("~p", [L]),
+    lists:reverse(
+        lists:foldl(
+            fun
+                ({id, ID}, ErrorList) ->
+                    validate_id(ID) ++ ErrorList;
+                ({project_id, ProjectID}, ErrorList) ->
+                    validate_project_id(ProjectID) ++ ErrorList;
+                ({activity, Activity}, ErrorList) ->
+                    validate_activity(Activity) ++ ErrorList;
+                ({state, State}, ErrorList) ->
+                    validate_state(State) ++ ErrorList;
+                ({task, Task}, ErrorList) ->
+                    validate_task(Task) ++ ErrorList;
+                ({timestamp_begin, _}, ErrorList) ->
+                    ErrorList;
+                ({timestamp_end, _}, ErrorList) ->
+                    validate_timestamps(Track) ++ ErrorList;
+                ({desc, Desc}, ErrorList) ->
+                    validate_desc(Desc) ++ ErrorList
+            end,
+            [],
+            L
+        )
+    ).
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_id_err() ::
+    {error, {id, ID :: term(), Msg :: unicode:unicode_binary()}}.
+
+-spec validate_id(ID :: term()) ->
+    ErrorList :: [validate_id_err()].
+%%--------------------------------------------------------------------
+validate_id(ID) when is_integer(ID), ID > 0 ->
+	[];
+validate_id(ID) ->
+	[{error, {id, ID, <<"id not a valid integer">>}}].
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_project_id_err() ::
+    {error, {project_id, ProjectID :: term(), Msg :: unicode:unicode_binary()}}.
+
+-spec validate_project_id(ProjectID :: term()) ->
+    ErrorList :: [validate_project_id_err()].
+%%--------------------------------------------------------------------
+validate_project_id(ProjectID) when is_binary(ProjectID) ->
+    case string:find(ProjectID, <<" ">>) of
+        nomatch ->
+            [];
+        _ ->
+            [{error, {project_id, ProjectID, <<"project_id contains spaces">>}}]
+    end;
+validate_project_id(ProjectID) ->
+    [{error, {project_id, ProjectID, <<"project_id not a binary">>}}].
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_activity_err() ::
+    {error, {activity, ActivityID :: term(), Msg :: unicode:unicode_binary()}}.
+
+-spec validate_activity(ActivityID :: term()) ->
+    ErrorList :: [validate_activity_err()].
+%%--------------------------------------------------------------------
+validate_activity({ActivityID, ActivityDesc}) when
+    is_integer(ActivityID), ActivityID > 0, is_binary(ActivityDesc)
+->
+    [];
+validate_activity({ActivityID, _ActivityDesc}) ->
+    [
+        {error,
+            {activity, ActivityID,
+                <<"activity must be {ActivityID, ActivityDesc}">>}}
+    ].
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_state_err() ::
+    {error, {state, State :: term(), Msg :: unicode:unicode_binary()}}.
+
+-spec validate_state(State :: term()) ->
+    [validate_state_err()].
+%%--------------------------------------------------------------------
+validate_state(tracking) ->
+    [];
+validate_state(finished) ->
+    [];
+validate_state(State) ->
+    [{error, {state, State, <<"state must be finished or tracking">>}}].
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_task_err() ::
+    {error,
+        {task, Task :: term(), Msg :: unicode:unicode_binary()},
+        characters_to_list_err() | {error, no_integer | not_a_list}
+    }
+    | {error,
+        {task, Task :: term(), Msg :: unicode:unicode_binary()}
+    }.
+
+-type characters_to_list_err() ::
+    {error, string(),
+        RestData ::
+            unicode:latin1_chardata()
+            | unicode:chardata()
+            | unicode:external_chardata()}
+    | {incomplete, string(), binary()}.
+
+-spec validate_task(Task :: term()) ->
+    [validate_task_err()].
+%%--------------------------------------------------------------------
+validate_task(Task) when is_binary(Task) ->
+    compose:compose(
+        [
+            fun(Either) ->
+                case either:is_left(Either) of
+                    true -> [either:extract(Either)];
+                    false -> []
+                end
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun({Int, Rest}) ->
+                        case string:is_empty(Rest) of
+                            true ->
+                                either:right(ok);
+                            false ->
+                                either:left(
+                                    {error, {task, Task, <<"task contains not numeric chars after integer">>}}
+                                )
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun(X) ->
+                        case string:list_to_integer(X) of
+                            Err = {error, no_integer} ->
+                                either:left({error, {task, Task, <<"Binary not a string representation of integer">>}, Err});
+                            Err = {error, not_a_list} ->
+                                either:left({error, {task, Task, <<"Binary not a string representation of integer">>}, Err});
+                            {Int, Rest} ->
+                                either:right({Int, Rest})
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun(X) ->
+                        case unicode:characters_to_list(X) of
+                            Err = {error, _, _} ->
+                                either:left({error, {task, Task, <<"Binary not a string">>}, Err});
+                            Err = {incomplete, _, _} ->
+                                either:left({error, {task, Task, <<"Binary not a string">>}, Err});
+                            String ->
+                                either:right(String)
+                        end
+                    end
+                )
+            end
+        ],
+        either:right(Task)
+    );
+validate_task(Task) ->
+    [{error, {task, Task, <<"task not a valid binary">>}}].
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_timestamps_err() ::
+    {error, {timestamp_begin, TsBegin :: term(), Msg :: unicode:unicode_binary()}}
+    | {error, {timestamp_end, TsEnd :: term(), Msg :: unicode:unicode_binary()}}
+    | {error, {timestamp, {TsBegin :: term(), TsEnd :: term()}, Msg :: unicode:unicode_binary()}}.
+
+-spec validate_timestamps(Track :: term()) ->
+    ErrorList :: [validate_timestamps_err()].
+%%--------------------------------------------------------------------
+validate_timestamps(Track) ->
+    compose:compose(
+        [
+            fun(V) ->
+                validation:extract_error_stack(V)
+            end,
+            fun(V) ->
+                validation:ok_flatmap(
+                    V,
+                    fun(Track2) ->
+                        case
+                            seconds(
+                                Track2#track.timestamp_begin,
+                                Track2#track.timestamp_end
+                            ) > 0
+                        of
+                            true ->
+                                validation:validation(Track2);
+                            false ->
+                                validation:validation_error([
+                                    {error,
+                                        {timestamp,
+                                            {
+                                                Track2#track.timestamp_begin,
+                                                Track2#track.timestamp_end
+                                            },
+                                            <<"timestamp_end - timestamp_begin must be positive">>
+                                        }
+                                    }
+                                ])
+                        end
+                    end
+                )
+            end,
+            fun(V) ->
+                validation:flatmap(
+                    V,
+                    fun(Track2) ->
+                        case is_datetime(Track2#track.timestamp_end) of
+                            true ->
+                                validation:validation(Track2);
+                            false ->
+                                validation:validation_error(
+                                    [{error,
+                                        {timestamp_end,
+                                            Track2#track.timestamp_end,
+                                            <<"timestamp_end not a valid datetime">>
+                                        }
+                                    }]
+                                )
+                        end
+                    end
+                )
+            end,
+            fun(V) ->
+                validation:flatmap(
+                    V,
+                    fun(Track2) ->
+                        case is_datetime(Track2#track.timestamp_begin) of
+                            true ->
+                                validation:validation(Track2);
+                            false ->
+                                validation:validation_error([
+                                    {error,
+                                        {timestamp_begin,
+                                            Track2#track.timestamp_begin,
+                                            <<"timestamp_begin not a valid datetime">>
+                                        }
+                                    }
+                                ])
+                        end
+                    end
+                )
+            end
+        ],
+        validation:validation(Track)
+    ).
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-type validate_desc_err() ::
+    {error, {desc, Desc :: term(), Msg :: unicode:unicode_binary()}}.
+
+-spec validate_desc(Desc :: term()) ->
+    ErrorList :: [validate_desc_err()].
+%%--------------------------------------------------------------------
+validate_desc(Desc) when is_binary(Desc) -> [];
+validate_desc(Desc) -> [{error, {desc, Desc, <<"desc is not a binary">>}}].
+%%--------------------------------------------------------------------
 
 %% начать трекать элемент по id
 %% track
@@ -394,6 +691,19 @@ to_xml(Track, UserId) ->
 seconds(TsBegin, TsEnd) ->
     (calendar:datetime_to_gregorian_seconds(TsEnd) -
         calendar:datetime_to_gregorian_seconds(TsBegin)) / 3600.
+
+is_datetime({{Y, Month, D}, {H, Min, S}})
+when
+    is_integer(Y),
+    is_integer(Month), Month >= 1, Month =< 12,
+    is_integer(D), D >= 1, D =< 31,
+    is_integer(H), H >= 0, H =< 23,
+    is_integer(Min), Min >= 0, Min =< 59,
+    is_integer(S), S >= 0, S =< 59
+->
+    true;
+is_datetime(_) ->
+    false.
 
 datetime_to_binary(DateTime) ->
     {{Y, Month, D}, {H, Min, S}} = DateTime,
