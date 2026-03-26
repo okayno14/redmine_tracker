@@ -2,19 +2,23 @@
 
 -include_lib("kernel/include/logger.hrl").
 
+%% clean functions
 -export([
     new/5,
     new/7,
     new/8,
-    %% validate
-    %% создать рекорд, положить в базу
+    %% создать рекорд
     %% track
     %% обновить отметку окончания трекаинга
     %% end_track
     from_csv/1,
     from_csv_all/1,
-    to_csv/1,
-    push_to_redmine/4
+    to_csv/1
+]).
+
+%% dirty functions
+-export([
+	push_to_redmine/4
     %% db-операции
     %% get
     %% set
