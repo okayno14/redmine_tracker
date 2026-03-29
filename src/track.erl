@@ -50,8 +50,7 @@
     id :: pos_integer(),
     project_id :: unicode:unicode_binary(),
     activity :: activity(),
-    %% TODO вынести в тип
-    state :: tracking | finished,
+    state :: track_state(),
     task :: unicode:unicode_binary(),
     timestamp_begin :: calendar:datetime(),
     timestamp_end :: calendar:datetime(),
@@ -63,6 +62,8 @@
 ]).
 
 -opaque track() :: #track{}.
+
+-type track_state() :: tracking | finished.
 
 -type activites() ::
     #{
@@ -106,7 +107,7 @@ make(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
     TsBegin :: calendar:datetime(),
     TsEnd :: calendar:datetime(),
     Desc :: unicode:unicode_binary(),
-    State :: tracking | finished
+    State :: track_state()
 ) ->
     track().
 new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
