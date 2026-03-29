@@ -20,10 +20,9 @@
     make/7,
     new/8,
     validate/1,
-    %% создать рекорд
-    %% track
-    %% обновить отметку окончания трекаинга
-    %% end_track
+    is_timestamps_at_one_date/2,
+    is_timestamps_positive/2,
+    finish/2,
     from_csv/2,
     from_csv_all/2,
     to_csv/1,
@@ -409,10 +408,31 @@ validate_desc(Desc) when is_binary(Desc) -> [];
 validate_desc(Desc) -> [{error, {desc, Desc, <<"desc is not a binary">>}}].
 %%--------------------------------------------------------------------
 
-%% начать трекать элемент по id
-%% track
-%% закончить трекать элемент по id
-%% end_track
+%%--------------------------------------------------------------------
+is_timestamps_at_one_date(Track2, TsEnd) ->
+    {{Y1, M1, D1}, _} = Track2#track.timestamp_begin,
+    {{Y2, M2, D2}, _} = TsEnd,
+    Y1 == Y2, M1 == M2, D1 == D2.
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+is_timestamps_positive(Track2, TsEnd) ->
+    seconds(Track2#track.timestamp_begin, TsEnd) > 0.
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+%% @doc
+%% <pre>
+%% require:
+%%   is_timestamps_at_one_date(Track, TsEnd), is_timestamps_positive(Track, TsEnd)
+%% </pre>
+%% @end
+-spec finish(Track :: track(), TsEnd :: calendar:datetime()) ->
+    Track2 :: track().
+%%--------------------------------------------------------------------
+finish(Track, TsEnd) ->
+    Track#track{state = finished, timestamp_end = TsEnd}.
+%%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
 -spec from_csv_all(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
