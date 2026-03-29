@@ -16,21 +16,23 @@
 
 %% clean functions
 -export([
-    new/5,
-    new/7,
+    make/7,
     new/8,
     validate/1,
     %% создать рекорд
     %% track
     %% обновить отметку окончания трекаинга
     %% end_track
-    from_csv/1,
-    from_csv_all/1,
-    to_csv/1
+    from_csv/2,
+    from_csv_all/2,
+    to_csv/1,
+
+    activity/2
 ]).
 
 %% dirty functions
 -export([
+    activities/0,
 	push_to_redmine/4
     %% db-операции
     %% get
@@ -38,13 +40,15 @@
     %% delete
 ]).
 
--eqwalizer({nowarn_function, from_csv_all/1}).
+-eqwalizer({nowarn_function, from_csv_all/2}).
 -eqwalizer({nowarn_function, validate/1}).
 -eqwalizer({nowarn_function, push_to_redmine_test_/0}).
+-eqwalizer({nowarn_function, activities/0}).
 
 -record(track, {
     id :: pos_integer(),
     project_id :: unicode:unicode_binary(),
+    %% TODO вынести в тип
     activity :: {ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()},
     %% TODO вынести в тип
     state :: tracking | finished,
@@ -60,32 +64,12 @@
 
 -opaque track() :: #track{}.
 
-%% TODO переименовать в make? Чтобы не было путаницы между конструктором и такими композициями
--spec new(
-    Id :: pos_integer(),
-    ProjectID :: unicode:unicode_binary(),
-    ActivityDesc ::
-        unicode:unicode_binary()
-        | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()},
-    Task :: unicode:unicode_binary(),
-    Desc :: unicode:unicode_binary()
-) ->
-    {error, activity_not_found} | track().
-new(Id, ProjectID, Activity, Task, Desc) when is_binary(Activity) ->
-    {ok, Activities = #{}} = application:get_env(redmine_tracker, activities),
-    %% TODO заменить на вызов find_acivity_by_desc/1
-    case maps:get(Activity, Activities, not_found) of
-        not_found ->
-            {error, activity_not_found};
-        ActivityID when is_number(ActivityID) ->
-            %% TODO может сдублировать код? Не нравятся эти прыжки по клаузам, обычно это потом тяжёло читать
-            new(Id, ProjectID, {ActivityID, Activity}, Task, Desc)
-    end;
-new(Id, ProjectID, Activity = {_, _}, Task, Desc) ->
-    T1 = calendar:universal_time(),
-    new(Id, ProjectID, Activity, Task, T1, T1, Desc).
+-type activites() ::
+    #{
+        ActivityDesc :: unicode:unicode_binary() => ActivityID :: pos_integer()
+    }.
 
--spec new(
+-spec make(
     Id :: pos_integer(),
     ProjectID :: unicode:unicode_binary(),
     Activity :: {
@@ -97,7 +81,7 @@ new(Id, ProjectID, Activity = {_, _}, Task, Desc) ->
     Desc :: unicode:unicode_binary()
 ) ->
     track().
-new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
+make(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
     new(Id, ProjectID, Activity, Task, TsBegin, TsEnd, Desc, tracking).
 
 -spec new(
@@ -418,14 +402,14 @@ validate_desc(Desc) -> [{error, {desc, Desc, <<"desc is not a binary">>}}].
 %% end_track
 
 %%--------------------------------------------------------------------
--spec from_csv_all(CSV :: unicode:unicode_binary()) ->
+-spec from_csv_all(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
     either:either(
         {error, bad_csv}
         | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()},
         track()
     ).
 %%--------------------------------------------------------------------
-from_csv_all(CSV) ->
+from_csv_all(CSV, Activities) ->
     lists:foldl(
         fun
             (<<>>, Either) ->
@@ -435,7 +419,7 @@ from_csv_all(CSV) ->
                     Either,
                     fun
                         (Acc) ->
-                            Ret = from_csv(Line),
+                            Ret = from_csv(Line, Activities),
                             case either:is_left(Ret) of
                                 true ->
                                     either:left(
@@ -457,7 +441,6 @@ from_csv_all(CSV) ->
     ).
 %%--------------------------------------------------------------------
 
-
 -type from_csv_err() ::
     {error, state, {error, Msg :: unicode:unicode_binary()}}
     | {error, timestamp_end, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
@@ -466,12 +449,12 @@ from_csv_all(CSV) ->
     | {error, activity, {error, not_found}}
     | {error, {bad_csv, Msg :: unicode:unicode_binary()}}.
 
--spec from_csv(CSV :: unicode:unicode_binary()) ->
+-spec from_csv(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
     either:either(
             from_csv_err(),
             track()
         ).
-from_csv(CSV) ->
+from_csv(CSV, Activities) ->
     compose:compose(
         [
             fun(Either) ->
@@ -548,13 +531,11 @@ from_csv(CSV) ->
                 either:flatmap(
                     Either,
                     fun([IDBin, ProjectID, TaskBin, ActivityDesc, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        case find_acivity_by_desc(ActivityDesc) of
-                            {error, not_found} ->
-                                either:left({error, activity, {error, not_found}});
-                            Activity = {_, _} ->
-                                ?LOG_DEBUG("q"),
-                                either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
-                        end
+                        either:cata(
+                            activity(ActivityDesc, Activities),
+                            fun(_) -> {error, activity, {error, not_found}} end,
+                            fun(Activity) -> [IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin] end
+                        )
                     end
                 )
             end,
@@ -626,6 +607,7 @@ to_csv(Track) ->
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
 	%% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
 	XML = unicode:characters_to_binary(to_xml(Track, UserId)),
+    ?LOG_DEBUG("Parsed XML:~ts", [XML]),
 	true = is_binary(XML),
     case
         httpc:request(
@@ -637,7 +619,8 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
                 XML
             },
             _HttpOptions = [
-                {ssl, [{verify, verify_none}]}
+                {ssl, [{verify, verify_none}]},
+                {timeout, 5000}
             ],
             _Options = []
         )
@@ -646,6 +629,7 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
             ?LOG_DEBUG("Response:~p", [Resp]),
             ok;
         {error, Reason} ->
+            ?LOG_WARNING("Reason:~p", [Reason]),
             {error, Reason}
     end.
 
@@ -834,18 +818,23 @@ binary_to_datetime_2(DateTimeBin) ->
 
 
 %%%===================================================================
-%%% app_db
+%%% activities
 %%%===================================================================
 
--spec find_acivity_by_desc(ActivityDesc :: unicode:unicode_binary()) ->
-    {error, not_found}
-    %% TODO вынести в отдельный тип, а то часто приходится копипастить
-    | {ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()}.
-find_acivity_by_desc(ActivityDesc) ->
+-spec activities() ->
+    activites().
+activities() ->
     {ok, Activities = #{}} = application:get_env(redmine_tracker, activities),
+    Activities.
+
+-spec activity(ActivityDesc :: unicode:unicode_binary(), Activities :: activites()) ->
+    either:either({error, not_found}, {ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()}).
+activity(ActivityDesc, Activities) ->
     case maps:get(ActivityDesc, Activities, not_found) of
-        not_found -> {error, not_found};
-        ActivityID when is_number(ActivityID) -> {ActivityID, ActivityDesc}
+        not_found ->
+            either:left({error, not_found});
+        ActivityID ->
+            either:right({ActivityID, ActivityDesc})
     end.
 
 %%%===================================================================
@@ -859,7 +848,7 @@ to_csv_test() ->
     ?assertEqual(
         <<"1,\"Redmine Tracker\",\"228\",Code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
         track:to_csv(
-            track:new(
+            track:make(
                 1,
                 <<"Redmine Tracker">>,
                 {1, <<"Code">>},
@@ -874,22 +863,18 @@ to_csv_test() ->
 %% TODO написать нормальный тест для проверки
 %% TODO сделать тестовый конфиг для логгера
 from_csv_test() ->
-    application:load(redmine_tracker),
-    application:set_env(
-        redmine_tracker,
-        activities,
-        #{
-            <<"Design">> => 8,
-            <<"Code">> => 9,
-            <<"Code Review">> => 90,
-            <<"Analysis">> => 96,
-            <<"Discuss">> => 10,
-            <<"Test">> => 11,
-            <<"Management">> => 12,
-            <<"Documentation">> => 13,
-            <<"Support">> => 14
-        }
-    ),
+    Activities =
+    #{
+        <<"Design">> => 8,
+        <<"Code">> => 9,
+        <<"Code Review">> => 90,
+        <<"Analysis">> => 96,
+        <<"Discuss">> => 10,
+        <<"Test">> => 11,
+        <<"Management">> => 12,
+        <<"Documentation">> => 13,
+        <<"Support">> => 14
+    },
     ?debugFmt(
         "~p\n",
         [
@@ -905,7 +890,8 @@ from_csv_test() ->
                         <<"tested csv-export">>,
                         finished
                     )
-                )
+                ),
+                Activities
             )
         ]
     ).
@@ -924,7 +910,7 @@ push_to_redmine_test_() ->
                     end
                 ),
                 track:push_to_redmine(
-                    track:new(
+                    track:make(
                         _Id = 1,
                         ProjectID = <<"Redmine Tracker">>,
                         _Activity = {1, <<"Code">>},
