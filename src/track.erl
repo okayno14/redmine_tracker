@@ -48,8 +48,7 @@
 -record(track, {
     id :: pos_integer(),
     project_id :: unicode:unicode_binary(),
-    %% TODO вынести в тип
-    activity :: {ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()},
+    activity :: activity(),
     %% TODO вынести в тип
     state :: tracking | finished,
     task :: unicode:unicode_binary(),
@@ -69,12 +68,14 @@
         ActivityDesc :: unicode:unicode_binary() => ActivityID :: pos_integer()
     }.
 
+-type activity() :: {
+    ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()
+}.
+
 -spec make(
     Id :: pos_integer(),
     ProjectID :: unicode:unicode_binary(),
-    Activity :: {
-        ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()
-    },
+    Activity :: activity(),
     Task :: unicode:unicode_binary(),
     TsBegin :: calendar:datetime(),
     TsEnd :: calendar:datetime(),
@@ -87,9 +88,7 @@ make(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc) ->
 -spec new(
     Id :: pos_integer(),
     ProjectID :: unicode:unicode_binary(),
-    Activity :: {
-        ActivityID :: pos_integer(), ActivityDesc :: unicode:unicode_binary()
-    },
+    Activity :: activity(),
     Task :: unicode:unicode_binary(),
     TsBegin :: calendar:datetime(),
     TsEnd :: calendar:datetime(),
@@ -828,7 +827,7 @@ activities() ->
     Activities.
 
 -spec activity(ActivityDesc :: unicode:unicode_binary(), Activities :: activites()) ->
-    either:either({error, not_found}, {ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()}).
+    either:either({error, not_found}, activity()).
 activity(ActivityDesc, Activities) ->
     case maps:get(ActivityDesc, Activities, not_found) of
         not_found ->
