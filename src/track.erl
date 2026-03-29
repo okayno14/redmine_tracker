@@ -859,40 +859,34 @@ to_csv_test() ->
         )
     ).
 
-%% TODO написать нормальный тест для проверки
 %% TODO сделать тестовый конфиг для логгера
 from_csv_test() ->
     Activities =
-    #{
-        <<"Design">> => 8,
-        <<"Code">> => 9,
-        <<"Code Review">> => 90,
-        <<"Analysis">> => 96,
-        <<"Discuss">> => 10,
-        <<"Test">> => 11,
-        <<"Management">> => 12,
-        <<"Documentation">> => 13,
-        <<"Support">> => 14
-    },
-    ?debugFmt(
-        "~p\n",
-        [
-            track:from_csv(
-                track:to_csv(
-                    track:new(
-                        1,
-                        <<"Redmine Tracker">>,
-                        {1, <<"Code">>},
-                        <<"228">>,
-                        {{2026, 02, 25}, {22, 42, 00}},
-                        {{2026, 02, 25}, {22, 50, 00}},
-                        <<"tested csv-export">>,
-                        finished
-                    )
-                ),
-                Activities
-            )
-        ]
+        #{
+            <<"Design">> => 8,
+            <<"Code">> => 9,
+            <<"Code Review">> => 90,
+            <<"Analysis">> => 96,
+            <<"Discuss">> => 10,
+            <<"Test">> => 11,
+            <<"Management">> => 12,
+            <<"Documentation">> => 13,
+            <<"Support">> => 14
+        },
+    Track =
+        track:new(
+            1,
+            <<"Redmine Tracker">>,
+            {9, <<"Code">>},
+            <<"228">>,
+            {{2026, 02, 25}, {22, 42, 00}},
+            {{2026, 02, 25}, {22, 50, 00}},
+            <<"tested csv-export">>,
+            finished
+        ),
+    ?assertEqual(
+        Track,
+        either:extract(track:from_csv(track:to_csv(Track), Activities))
     ).
 
 push_to_redmine_test_() ->
