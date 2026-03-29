@@ -16,6 +16,7 @@
 
 %% clean functions
 -export([
+    make/6,
     make/7,
     new/8,
     validate/1,
@@ -71,6 +72,18 @@
 -type activity() :: {
     ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()
 }.
+
+-spec make(
+    Id :: pos_integer(),
+    ProjectID :: unicode:unicode_binary(),
+    Activity :: activity(),
+    Task :: unicode:unicode_binary(),
+    TsBegin :: calendar:datetime(),
+    Desc :: unicode:unicode_binary()
+) ->
+    track().
+make(Id, ProjectID, Activity = {_, _}, Task, TsBegin, Desc) ->
+    make(Id, ProjectID, Activity, Task, TsBegin, TsBegin, Desc).
 
 -spec make(
     Id :: pos_integer(),
