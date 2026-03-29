@@ -859,7 +859,6 @@ to_csv_test() ->
         )
     ).
 
-%% TODO сделать тестовый конфиг для логгера
 from_csv_test() ->
     Activities =
         #{
