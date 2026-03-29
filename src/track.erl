@@ -328,12 +328,30 @@ validate_timestamps(Track) ->
                 validation:ok_flatmap(
                     V,
                     fun(Track2) ->
-                        case
-                            seconds(
-                                Track2#track.timestamp_begin,
-                                Track2#track.timestamp_end
-                            ) > 0
-                        of
+                        case is_timestamps_at_one_date(Track2, Track2#track.timestamp_end) of
+                            true ->
+                                validation:validation(Track2);
+                            false ->
+                                validation:validation_error([
+                                    {error,
+                                        {timestamp,
+                                            {
+                                                Track2#track.timestamp_begin,
+                                                Track2#track.timestamp_end
+                                            },
+                                            <<"timestamp_end, timestamp_begin must be at one date">>
+                                        }
+                                    }
+                                ])
+                        end
+                    end
+                )
+            end,
+            fun(V) ->
+                validation:ok_flatmap(
+                    V,
+                    fun(Track2) ->
+                        case is_timestamps_positive(Track2, Track2#track.timestamp_end) of
                             true ->
                                 validation:validation(Track2);
                             false ->
