@@ -1,5 +1,6 @@
 -module(track).
 
+-include_lib("redmine_tracker/include/track.hrl").
 -include_lib("kernel/include/logger.hrl").
 
 -define(
@@ -33,11 +34,15 @@
 %% dirty functions
 -export([
     activities/0,
-	push_to_redmine/4
+	push_to_redmine/4,
     %% db-операции
-    %% get
-    %% set
-    %% delete
+    create_table/0,
+    init_tables/0,
+    wait_for_tables/0,
+    next_id/0,
+    get/1,
+    set/1,
+    delete/1
 ]).
 
 -eqwalizer({nowarn_function, from_csv_all/2}).
@@ -45,33 +50,15 @@
 -eqwalizer({nowarn_function, push_to_redmine_test_/0}).
 -eqwalizer({nowarn_function, activities/0}).
 
--record(track, {
-    id :: pos_integer(),
-    project_id :: unicode:unicode_binary(),
-    activity :: activity(),
-    state :: track_state(),
-    task :: unicode:unicode_binary(),
-    timestamp_begin :: calendar:datetime(),
-    timestamp_end :: calendar:datetime(),
-    desc :: unicode:unicode_binary()
-}).
-
 -export_type([
     track/0
 ]).
 
 -opaque track() :: #track{}.
 
--type track_state() :: tracking | finished.
-
--type activites() ::
-    #{
-        ActivityDesc :: unicode:unicode_binary() => ActivityID :: pos_integer()
-    }.
-
--type activity() :: {
-    ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()
-}.
+%%%===================================================================
+%%% track
+%%%===================================================================
 
 -spec make(
     Id :: pos_integer(),
@@ -867,6 +854,51 @@ binary_to_datetime_2(DateTimeBin) ->
         either:right(DateTimeBin)
     ).
 
+
+%%%===================================================================
+%%% track.db
+%%%===================================================================
+
+create_table() ->
+    case
+        mnesia:create_table(track_id, [
+            {attributes, record_info(fields, track_id)},
+            {disc_copies, [erlang:node()]}
+        ])
+    of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, _}} -> ok
+    end,
+    case
+        mnesia:create_table(track, [
+            {attributes, record_info(fields, track)},
+            {disc_copies, [erlang:node()]}
+        ])
+    of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, _}} -> ok
+    end.
+
+wait_for_tables() ->
+    mnesia:wait_for_tables([track, track_id], infinity).
+
+init_tables() ->
+    case mnesia:read({track_id, key}) of
+        [] -> mnesia:write(#track_id{}), ok;
+        _ -> ok
+    end.
+
+next_id() ->
+    mnesia:dirty_update_counter(track_id, #track_id.last_id, 1).
+
+get(ID) ->
+    mnesia:read({track, ID}).
+
+set(Track = #track{}) ->
+    mnesia:write(Track).
+
+delete(Track = #track{}) ->
+    mnesia:delete({track, Track#track.id}).
 
 %%%===================================================================
 %%% activities
