@@ -34,7 +34,7 @@
 %% dirty functions
 -export([
     activities/0,
-	push_to_redmine/4,
+    push_to_redmine/4,
     %% db-операции
     create_table/0,
     init_tables/0,
@@ -157,9 +157,9 @@ validate(Track = #track{}) ->
     ErrorList :: [validate_id_err()].
 %%--------------------------------------------------------------------
 validate_id(ID) when is_integer(ID), ID > 0 ->
-	[];
+    [];
 validate_id(ID) ->
-	[{error, {id, ID, <<"id not a valid integer">>}}].
+    [{error, {id, ID, <<"id not a valid integer">>}}].
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
@@ -577,13 +577,13 @@ from_csv(CSV, Activities) ->
                     end
                 )
             end,
-			%% Any csv field can be enclosed in double quotes
-			fun(Either) ->
-				either:map(
-					Either,
-					fun(L) -> lists:map(fun(X) -> string:trim(X, both, "\"") end, L) end
-				)
-			end,
+            %% Any csv field can be enclosed in double quotes
+            fun(Either) ->
+                either:map(
+                    Either,
+                    fun(L) -> lists:map(fun(X) -> string:trim(X, both, "\"") end, L) end
+                )
+            end,
             fun(Either) ->
                 either:flatmap(
                     Either,
@@ -643,10 +643,10 @@ to_csv(Track) ->
 ) ->
     ok | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
-	%% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
-	XML = unicode:characters_to_binary(to_xml(Track, UserId)),
+    %% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
+    XML = unicode:characters_to_binary(to_xml(Track, UserId)),
     ?LOG_DEBUG("Parsed XML:~ts", [XML]),
-	true = is_binary(XML),
+    true = is_binary(XML),
     case
         httpc:request(
             post,
@@ -684,7 +684,7 @@ to_xml(Track, UserId) ->
         xmerl:export_simple(
             [
                 {time_entry, [
-					%% TODO переделать все конвертации строк/бинарей на unicode-модуль
+                    %% TODO переделать все конвертации строк/бинарей на unicode-модуль
                     {project_id, [erlang:binary_to_list(ProjectID)]},
                     {issue_id, [erlang:binary_to_list(Task)]},
                     {activity_id, [erlang:integer_to_list(ActivityID)]},
