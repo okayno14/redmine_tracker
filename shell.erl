@@ -3,7 +3,7 @@
 L =
 either:extract(
     either:flatmap(
-        track:from_csv_all(CSV, track:activities()),
+        tracks:from_csv_all(CSV, track:activities()),
         fun(L) ->
             case lists:filter(fun({_Track2, Ret2}) -> Ret2 =/= [] end, [{Track, track:validate(Track)} || Track <- L]) of
                 [] -> either:right(L);

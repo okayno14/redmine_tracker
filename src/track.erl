@@ -25,7 +25,6 @@
     is_timestamps_positive/2,
     finish/2,
     from_csv/2,
-    from_csv_all/2,
     to_csv/1,
 
     activity/2
@@ -45,13 +44,13 @@
     delete/1
 ]).
 
--eqwalizer({nowarn_function, from_csv_all/2}).
 -eqwalizer({nowarn_function, validate/1}).
 -eqwalizer({nowarn_function, push_to_redmine_test_/0}).
 -eqwalizer({nowarn_function, activities/0}).
 
 -export_type([
-    track/0
+    track/0,
+    from_csv_err/0
 ]).
 
 -opaque track() :: #track{}.
@@ -437,46 +436,6 @@ is_timestamps_positive(Track2, TsEnd) ->
 %%--------------------------------------------------------------------
 finish(Track, TsEnd) ->
     Track#track{state = finished, timestamp_end = TsEnd}.
-%%--------------------------------------------------------------------
-
-%%--------------------------------------------------------------------
--spec from_csv_all(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
-    either:either(
-        {error, bad_csv}
-        | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()},
-        track()
-    ).
-%%--------------------------------------------------------------------
-from_csv_all(CSV, Activities) ->
-    lists:foldl(
-        fun
-            (<<>>, Either) ->
-                either:map(Either, fun lists:reverse/1);
-            (Line, Either) when is_binary(Line) ->
-                either:flatmap(
-                    Either,
-                    fun
-                        (Acc) ->
-                            Ret = from_csv(Line, Activities),
-                            case either:is_left(Ret) of
-                                true ->
-                                    either:left(
-                                        {error,
-                                            {bad_csv, Line},
-                                            either:extract(Ret)
-                                        }
-                                    );
-                                false ->
-                                    either:right(
-                                        [either:extract(Ret) | Acc]
-                                    )
-                            end
-                    end
-                )
-        end,
-        either:right([]),
-        string:split(CSV, <<"\n">>, all)
-    ).
 %%--------------------------------------------------------------------
 
 -type from_csv_err() ::
@@ -879,6 +838,7 @@ create_table() ->
         {aborted, {already_exists, _}} -> ok
     end.
 
+%% TODO вынести в бехивер
 wait_for_tables() ->
     mnesia:wait_for_tables([track, track_id], infinity).
 
