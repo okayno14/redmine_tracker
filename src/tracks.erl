@@ -1,5 +1,6 @@
 -module(tracks).
 
+-include_lib("kernel/include/logger.hrl").
 -include_lib("redmine_tracker/include/track.hrl").
 
 %% clean functions
@@ -9,7 +10,8 @@
 
 %% dirty functions
 -export([
-    all/0
+    all/0,
+    max_tracking/0
 ]).
 
 -eqwalizer({nowarn_function, from_csv_all/2}).
@@ -57,4 +59,22 @@ from_csv_all(CSV, Activities) ->
 
 all() ->
     mnesia:match_object(#track{_ = '_'}).
+
+%% TODO может запихать в track? Т.к. жёстко нарушаем инкапсуляцию track
+%% TODO может использовать какую-нибудь proplists, key* - функцию?
+max_tracking() ->
+    X = mnesia:match_object(#track{state = tracking, _ = '_'}),
+    ?LOG_ERROR("~p", [X]),
+    case X of
+        [] -> [];
+        _ ->
+            lists:foldl(
+                fun
+                    (Track = #track{id = ID}, _TrackAcc = #track{id = ID2}) when ID > ID2 -> Track;
+                    (_Track, TrackAcc) -> TrackAcc
+                end,
+                erlang:hd(X),
+                erlang:tl(X)
+            )
+    end.
 
