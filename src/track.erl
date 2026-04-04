@@ -23,6 +23,7 @@
     validate/1,
     is_timestamps_at_one_date/2,
     is_timestamps_positive/2,
+    id/1,
     finish/2,
     from_csv/2,
     to_csv/1,
@@ -38,6 +39,8 @@
     create_table/0,
     init_tables/0,
     wait_for_tables/0,
+    last_id/0,
+    inc_id/1,
     next_id/0,
     get/1,
     set/1,
@@ -68,7 +71,7 @@
     Desc :: unicode:unicode_binary()
 ) ->
     track().
-make(Id, ProjectID, Activity = {_, _}, Task, TsBegin, Desc) ->
+make(Id, ProjectID, Activity, Task, TsBegin, Desc) ->
     make(Id, ProjectID, Activity, Task, TsBegin, TsBegin, Desc).
 
 -spec make(
@@ -340,6 +343,8 @@ validate_timestamps(Track) ->
                         case is_timestamps_positive(Track2, Track2#track.timestamp_end) of
                             true ->
                                 validation:validation(Track2);
+                            false when Track2#track.state == tracking ->
+                                validation:validation(Track2);
                             false ->
                                 validation:validation_error([
                                     {error,
@@ -423,6 +428,9 @@ is_timestamps_at_one_date(Track2, TsEnd) ->
 is_timestamps_positive(Track2, TsEnd) ->
     seconds(Track2#track.timestamp_begin, TsEnd) > 0.
 %%--------------------------------------------------------------------
+
+id(Track) ->
+    Track#track.id.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -848,8 +856,18 @@ init_tables() ->
         _ -> ok
     end.
 
+last_id() ->
+    [#track_id{last_id = LastID}] = mnesia:read({track_id, key}),
+    LastID.
+
 next_id() ->
-    mnesia:dirty_update_counter(track_id, #track_id.last_id, 1).
+    inc_id(1).
+
+inc_id(Inc) ->
+    LastID = last_id(),
+    LastID2 = LastID + Inc,
+    mnesia:write(#track_id{key = key, last_id = LastID2}),
+    LastID2.
 
 get(ID) ->
     mnesia:read({track, ID}).
@@ -865,10 +883,12 @@ delete(Track = #track{}) ->
 %%%===================================================================
 
 -spec activities() ->
-    activites().
+    either:either({error, not_found}, Activities :: activites()).
 activities() ->
-    {ok, Activities = #{}} = application:get_env(redmine_tracker, activities),
-    Activities.
+    case application:get_env(redmine_tracker, activities) of
+        undefined -> either:left({error, not_found});
+        {ok, Activities} -> either:right(Activities)
+    end.
 
 -spec activity(ActivityDesc :: unicode:unicode_binary(), Activities :: activites()) ->
     either:either({error, not_found}, activity()).

@@ -7,9 +7,9 @@
     %% если последний трекинг незавершённый, то завершаем его
     end_track_last/0,
     %% экспортировать всю базу в csv
-    export_to_csv/0
-    %% переписать всю базу содержим csv
-    %% import_from csv
+    export_to_csv/0,
+    %% переписать всю базу содержимым csv
+    import_from_csv/1
     %% очистить всю базу и отправить в redmine_api
     %% push_to_redmine
 ]).
@@ -55,17 +55,30 @@ begin_track(ProjectID, ActivityDesc, Task, Desc) ->
                     either:flatmap(
                         X,
                         fun
-                            (_) when is_binary(ActivityDesc) ->
-                                track:activity(ActivityDesc, track:activities());
+                            (Activities) when is_binary(ActivityDesc) ->
+                                track:activity(ActivityDesc, Activities);
                             (_) ->
                                 either:left({error, <<"ActivityDesc must be a binary">>})
                         end
                     )
                 end,
                 fun(X) ->
+                    either:flatmap(
+                        X,
+                        fun([]) ->
+                            compose:if_else(
+                                fun either:is_right/1,
+                                fun(EitherActivities) -> either:right(either:extract(EitherActivities)) end,
+                                fun(_) -> either:left({error, <<"Activities DB empty">>}) end,
+                                track:activities()
+                            )
+                        end
+                    )
+                end,
+                fun([]) ->
                     compose:if_else(
                         fun(X2) -> ?LOG_ERROR("~p", [X2]), X2 == [] end,
-                        fun(_) -> either:right(X) end,
+                        fun(_) -> either:right([]) end,
                         fun(_) -> either:left({error, <<"There is already an active tracking">>}) end,
                         tracks:max_tracking()
                     )
@@ -146,6 +159,65 @@ export_to_csv() ->
         )
     end,
     %% можно сделать dirty-функцию
+    db:transaction(F).
+
+import_from_csv(CSV) when is_binary(CSV) ->
+    F = fun() ->
+        compose:compose(
+            [
+                fun(X) ->
+                    either:map(
+                        X,
+                        fun(Tracks) ->
+                            LastIDImported = lists:max([track:id(Track) || Track <- Tracks]),
+                            LastID = track:last_id(),
+                            compose:if_else(
+                                fun(X2) -> X2 > 0 end,
+                                fun(X2) -> track:inc_id(X2) end,
+                                fun(_X2) -> ok end,
+                                LastIDImported - LastID
+                            )
+                        end
+                    )
+                end,
+                fun(X) ->
+                    either:map(
+                        X,
+                        fun(Tracks) ->
+                            lists:foreach(fun track:set/1, Tracks),
+                            Tracks
+                        end
+                    )
+                end,
+                fun(X) ->
+                    either:flatmap(
+                        X,
+                        fun(_Tracks) ->
+                            tracks:remove_all(),
+                            X
+                        end
+                    )
+                end,
+                fun(X) ->
+                    either:flatmap(
+                        X,
+                        fun(Activities) ->
+                            tracks:from_csv_all(CSV, Activities)
+                        end
+                    )
+                end,
+                fun(_) ->
+                    compose:if_else(
+                        fun either:is_right/1,
+                        fun(EitherActivities) -> either:right(either:extract(EitherActivities)) end,
+                        fun(_) -> either:left({error, <<"Activities DB empty">>}) end,
+                        track:activities()
+                    )
+                end
+            ],
+            []
+        )
+    end,
     db:transaction(F).
 
 either_throw(Either) ->

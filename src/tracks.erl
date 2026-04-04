@@ -13,7 +13,8 @@
     all_sorted_by_timestamp_start/0,
     all_sorted_by_id/0,
     all/0,
-    max_tracking/0
+    max_tracking/0,
+    remove_all/0
 ]).
 
 -eqwalizer({nowarn_function, from_csv_all/2}).
@@ -24,7 +25,7 @@
     either:either(
         {error, bad_csv}
         | {error, {bad_csv, Line :: unicode:unicode_binary()}, track:from_csv_err()},
-        track:track()
+        [track:track()]
     ).
 %%--------------------------------------------------------------------
 from_csv_all(CSV, Activities) ->
@@ -94,6 +95,11 @@ max_tracking() ->
         end,
         L
     ).
+
+remove_all() ->
+    [mnesia:delete({track, Track#track.id}) || Track <- all()],
+    ok.
+
 list_max(F, []) -> [];
 list_max(F, L) -> list_max_(F, L, erlang:hd(L)).
 
