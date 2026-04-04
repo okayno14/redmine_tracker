@@ -5,9 +5,9 @@
 -export([
     begin_track/4,
     %% если последний трекинг незавершённый, то завершаем его
-    end_track_last/0
+    end_track_last/0,
     %% экспортировать всю базу в csv
-    % export_to_csv
+    export_to_csv/0
     %% переписать всю базу содержим csv
     %% import_from csv
     %% очистить всю базу и отправить в redmine_api
@@ -122,6 +122,30 @@ end_track_last() ->
             []
         )
     end,
+    db:transaction(F).
+
+%% TODO надо добавить сортировку по id
+%% TODO почему-то русские символы в Desc, возможно, что проблема была в моём вызове write_file, либо мнезиа как-то неправильно хранит track
+export_to_csv() ->
+    F = fun() ->
+        compose:compose(
+            [
+                fun(TrackList) ->
+                    lists:foldl(
+                        fun
+                            (CSV, <<"">>) -> CSV;
+                            (CSV, Acc) -> <<Acc/binary, "\n", CSV/binary>>
+                        end,
+                        <<"">>,
+                        [track:to_csv(Track) || Track <- TrackList]
+                    )
+                end,
+                fun(_) -> tracks:all_sorted_by_timestamp_start() end
+            ],
+            []
+        )
+    end,
+    %% можно сделать dirty-функцию
     db:transaction(F).
 
 either_throw(Either) ->

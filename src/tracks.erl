@@ -10,6 +10,8 @@
 
 %% dirty functions
 -export([
+    all_sorted_by_timestamp_start/0,
+    all_sorted_by_id/0,
     all/0,
     max_tracking/0
 ]).
@@ -56,6 +58,18 @@ from_csv_all(CSV, Activities) ->
         string:split(CSV, <<"\n">>, all)
     ).
 %%--------------------------------------------------------------------
+
+%% TODO переименовать, надо ли внурь track запихать функцию
+all_sorted_by_timestamp_start() ->
+    lists:sort(
+        fun(TrackA, TrackB) ->
+            track:is_timestamps_positive(TrackA, TrackB#track.timestamp_begin)
+        end,
+        all()
+    ).
+
+all_sorted_by_id() ->
+    lists:keysort(#track.id, all()).
 
 all() ->
     mnesia:match_object(#track{_ = '_'}).
