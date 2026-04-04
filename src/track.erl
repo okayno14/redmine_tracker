@@ -610,6 +610,7 @@ to_csv(Track) ->
 ) ->
     ok | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
+    %% TODO в некоторых случаях апи редмайна возвращает ошибки внутри 200-ых кодов
     %% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
     XML = unicode:characters_to_binary(to_xml(Track, UserId)),
     ?LOG_DEBUG("Parsed XML:~ts", [XML]),

@@ -9,9 +9,9 @@
     %% экспортировать всю базу в csv
     export_to_csv/0,
     %% переписать всю базу содержимым csv
-    import_from_csv/1
+    import_from_csv/1,
     %% очистить всю базу и отправить в redmine_api
-    %% push_to_redmine
+    push_to_redmine/0
 ]).
 
 %% TODO проработать формат ошибок
@@ -219,6 +219,97 @@ import_from_csv(CSV) when is_binary(CSV) ->
         )
     end,
     db:transaction(F).
+
+push_to_redmine() ->
+    Param =
+        fun(Config, Key) ->
+            case proplists:get_value(Key, Config, not_found) of
+                not_found -> either:left({error, not_found});
+                V -> either:right(V)
+            end
+        end,
+
+    UpdateParam =
+            fun(Either, Key) ->
+                either:flatmap(
+                    Either,
+                    fun(X) ->
+                        #{config := Config} = X,
+                        ?LOG_DEBUG("X:~p Param:~p", [X, Param(Config, Key)]),
+                        compose:if_else(
+                            fun either:is_right/1,
+                            fun(X2) -> either:right(maps:put(Key, either:extract(X2), X)) end,
+                            fun(_) -> either:left({error, {not_configured, Key}}) end,
+                            Param(Config, Key)
+                        )
+                    end
+                )
+            end,
+
+    compose:compose(
+        [
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun(Tracks) ->
+                        case db:transaction(fun() -> [track:delete(Track) || Track <- Tracks] end) of
+                            {atomic, _} -> either:right(ok);
+                            {aborted, Reason} -> either:left({error, {db_clean, Reason}})
+                        end
+                    end
+                )
+            end,
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun(X) ->
+                        #{
+                            user_id := UserId,
+                            redmine_instance := RedmineInstance,
+                            api_key := ApiKey,
+                            tracks := Tracks
+                        } = X,
+                        Ret =
+                            lists:foldl(
+                                fun(Track, ErrorList) ->
+                                    case track:push_to_redmine(Track, UserId, RedmineInstance, ApiKey) of
+                                        ok -> ErrorList;
+                                        {error, Reason} -> [{track:id(Track), Reason} | ErrorList]
+                                    end
+                                end,
+                                [],
+                                Tracks
+                            ),
+                        case Ret of
+                            [] -> either:right(Tracks);
+                            _ -> either:left({error, {push, Ret}})
+                        end
+                    end
+                )
+            end,
+            %% TODO можно переписать: параметры всегда лежат в конфиге, дефолт настроен -> можно написать проще
+            fun(Either) -> UpdateParam(Either, api_key) end,
+            fun(Either) -> UpdateParam(Either, redmine_instance) end,
+            fun(Either) -> UpdateParam(Either, user_id) end,
+            fun(Either) ->
+                either:map(
+                    Either,
+                    fun(X) ->
+                        %% TODO вынести в модуль Config
+                        X#{config => application:get_all_env(redmine_tracker)}
+                    end
+                )
+            end,
+            fun(X) ->
+                ?LOG_DEBUG("a"),
+                case db:transaction(fun tracks:all/0) of
+                    {atomic, Tracks} -> either:right(X#{tracks => Tracks});
+                    {aborted, Reason} -> either:left({error, {db_fetch, Reason}})
+                end
+            end
+        ],
+        #{}
+    ).
 
 either_throw(Either) ->
     compose:if_else(
