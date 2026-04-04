@@ -62,19 +62,33 @@ all() ->
 
 %% TODO может запихать в track? Т.к. жёстко нарушаем инкапсуляцию track
 %% TODO может использовать какую-нибудь proplists, key* - функцию?
+%% TODO надо по времени сравнивать, а не id
 max_tracking() ->
-    X = mnesia:match_object(#track{state = tracking, _ = '_'}),
-    ?LOG_ERROR("~p", [X]),
-    case X of
-        [] -> [];
-        _ ->
-            lists:foldl(
-                fun
-                    (Track = #track{id = ID}, _TrackAcc = #track{id = ID2}) when ID > ID2 -> Track;
-                    (_Track, TrackAcc) -> TrackAcc
-                end,
-                erlang:hd(X),
-                erlang:tl(X)
-            )
+    L = mnesia:match_object(#track{state = tracking, _ = '_'}),
+    ?LOG_ERROR("~p", [L]),
+    list_max(
+        fun(X, Acc) ->
+            %% TODO спрятать в track?
+            A = X#track.id,
+            B = Acc#track.id,
+            case {A, B} of
+                {A, A} -> eq;
+                {B, B} -> eq;
+                {A, B} when A > B -> gt;
+                _ -> lt
+            end
+        end,
+        L
+    ).
+list_max(F, []) -> [];
+list_max(F, L) -> list_max_(F, L, erlang:hd(L)).
+
+list_max_(F, [], Acc) ->
+    Acc;
+list_max_(F, [H | T], Acc) ->
+    case F(H, Acc) of
+        gt -> list_max_(F, T, H);
+        eq -> list_max_(F, T, H);
+        lt -> list_max_(F, T, Acc)
     end.
 
