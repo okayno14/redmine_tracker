@@ -1,0 +1,4 @@
+
+* $XDG_STATE_HOME/redmine_tracker - mnesia
+* $XDG_RUNTIME_DIR/redmine_tracker/in.sock - сокет для запросов (у папки должно быть право 0700)
+
