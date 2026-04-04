@@ -3,9 +3,9 @@
 -include_lib("kernel/include/logger.hrl").
 
 -export([
-    begin_track/4
+    begin_track/4,
     %% если последний трекинг незавершённый, то завершаем его
-    % end_track_last
+    end_track_last/0
     %% экспортировать всю базу в csv
     % export_to_csv
     %% переписать всю базу содержим csv
@@ -74,8 +74,54 @@ begin_track(ProjectID, ActivityDesc, Task, Desc) ->
             []
         )
     end,
-    %% TODO по-моему транзакция должна жить внутри контроллера?
-    %% TODO а точно ли валидация должна быть тут, а не в контроллере?
+    db:transaction(F).
+
+end_track_last() ->
+    F = fun() ->
+        compose:compose(
+            [
+                fun either_throw/1,
+                %% TODO надо сделать каррирование для функций монад, можно красиво композиции писать
+                fun(X) -> either:map(X, fun track:set/1) end,
+                %% TODO сплитануть на 2 функции, чтобы выдавать более чёткую ошибку
+                fun(X) ->
+                    either:flatmap(
+                        X,
+                        fun(Track) ->
+                            TsEnd = calendar:local_time(),
+                            compose:if_else(
+                                fun(_) ->
+                                    track:is_timestamps_at_one_date(Track, TsEnd),
+                                    track:is_timestamps_positive(Track, TsEnd)
+                                end,
+                                fun(_) ->
+                                    either:right(track:finish(Track, TsEnd))
+                                end,
+                                fun(_) ->
+                                    either:left({error, <<"bad timestamp">>})
+                                end,
+                                Track
+                            )
+                        end
+                    )
+                end,
+                fun(_) ->
+                    compose:if_else(
+                        fun(X2) ->
+                            ?LOG_ERROR("~p", [X2]),
+                            X2 == []
+                        end,
+                        fun(_) ->
+                            either:left({error, <<"There is no track to finish">>})
+                        end,
+                        fun either:right/1,
+                        tracks:max_tracking()
+                    )
+                end
+            ],
+            []
+        )
+    end,
     db:transaction(F).
 
 either_throw(Either) ->
