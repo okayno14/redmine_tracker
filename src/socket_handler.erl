@@ -6,7 +6,10 @@
 -define(TIMEOUT, infinity).
 
 %% api
--export([start_link/1]).
+-export([
+    start_link/1,
+    send_response/3
+]).
 
 %% gen_server
 -export([
@@ -38,6 +41,9 @@ start_link(ListenSocket) ->
     {ok, _Pid} = gen_server:start_link(?MODULE, {ListenSocket}, []).
 %%--------------------------------------------------------------------
 
+send_response(SocketHandler, Socket, Response) ->
+    gen_server:cast(SocketHandler, {send_response, Socket, Response}).
+
 %%%===================================================================
 %%% gen_server
 %%%===================================================================
@@ -45,7 +51,7 @@ start_link(ListenSocket) ->
 %%--------------------------------------------------------------------
 %% @doc
 -spec init({ListenSocket :: gen_tcp:socket()}) ->
-    {ok, state(), {continue, {accept, ListenSocket :: gen_tcp:socket()}}}.
+    {ok, state(), {continue, accept}}.
 %%--------------------------------------------------------------------
 init({ListenSocket}) ->
     State = #state{listen_socket = ListenSocket},
@@ -55,6 +61,7 @@ init({ListenSocket}) ->
 handle_continue(accept, State) ->
     #state{listen_socket = ListenSocket} = State,
     {ok, Socket} = gen_tcp:accept(ListenSocket),
+    ?LOG_DEBUG("Accepted Socket:~p", [Socket]),
     {noreply, State#state{socket = Socket}}.
 
 %%--------------------------------------------------------------------
@@ -70,8 +77,13 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 %% @doc
 -spec handle_cast(Request :: term(), State :: state()) ->
-    {noreply, State2 :: state()}.
+    {noreply, State2 :: state()} | {noreply, State2 :: state(), {continue, accept}}.
 %%--------------------------------------------------------------------
+handle_cast({send_response, Socket, Response}, State) ->
+    case send_response_(Socket, Response, State) of
+        new_socket -> {noreply, State, {continue, accept}};
+        ok -> {noreply, State}
+    end;
 handle_cast(_Request, State) ->
     {noreply, State}.
 %%--------------------------------------------------------------------
@@ -81,12 +93,12 @@ handle_cast(_Request, State) ->
 -spec handle_info(Info :: term(), State :: state()) ->
     {noreply, State :: state()} | {noreply, State :: state(), {continue, accept}}.
 %%--------------------------------------------------------------------
-handle_info({tcp, Socket, RequestRaw}, State = #state{socket = Socket}) ->
+handle_info({tcp, Socket, RequestRaw}, State = #state{}) ->
     compose:if_else(
         fun either:is_right/1,
         fun(X) -> {noreply, either:extract(X)} end,
         fun(X) -> {noreply, either:extract(X), {continue, accept}} end,
-        handle_request(RequestRaw, State)
+        handle_request(Socket, RequestRaw, State)
     );
 handle_info(_Info, State) ->
     ?LOG_WARNING("Unknown MSG:~p", [_Info]),
@@ -106,10 +118,17 @@ terminate(_Reason, _State) ->
 %%% state_composed
 %%%===================================================================
 
-handle_request(RequestRaw, State) ->
+handle_request(Socket, RequestRaw, State = #state{socket = Socket}) ->
     Session =
         fun(X) ->
-            case supervisor:start_child(session_sup, [erlang:self(), RequestRaw]) of
+            %% TODO вынести в api session_sup
+            case
+                supervisor:start_child(session_sup, [
+                    erlang:self(),
+                    Socket,
+                    RequestRaw
+                ])
+            of
                 {ok, _} -> either:right(X);
                 {ok, _, _} -> either:right(X);
                 {error, Reason} -> either:left({X, {error, Reason}})
@@ -125,11 +144,29 @@ handle_request(RequestRaw, State) ->
                         gen_tcp:close(X#state.socket),
                         X
                     end,
-                    fun(X) -> X end
+                    fun(X) ->
+                        #state{socket = Socket} = X,
+                        ?LOG_DEBUG("Created Session with Socket:~p", [Socket]),
+                        X
+                    end
                 )
             end,
             fun(Either) -> either:flatmap(Either, Session) end
         ],
         either:right(State)
-    ).
+    );
+%% drops msgs for old sockets
+handle_request(_Socket, _RequestRaw, State = #state{}) ->
+    either:right(State).
+
+%% Если старый сокет - то игнор: коннекция закрыта клиентом или сломалась до завершения сессии - ответ не нужно отдавать.
+%% Попробовать отдать ответ, наверху через continue устанавливаем новый сокет
+%% TODO надо добавить нормальное логгирование: запрос с таким-то Id зафейлился
+send_response_(Socket, Response, _State = #state{socket = Socket}) ->
+    gen_tcp:send(Socket, Response),
+    gen_tcp:close(Socket),
+    ?LOG_DEBUG("Sent response to socket:~p. Socket closed", [Socket]),
+    new_socket;
+send_response_(_Socket, _Response, _State) ->
+    ok.
 
