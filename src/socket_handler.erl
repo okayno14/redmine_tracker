@@ -100,6 +100,9 @@ handle_info({tcp, Socket, RequestRaw}, State = #state{}) ->
         fun(X) -> {noreply, either:extract(X), {continue, accept}} end,
         handle_request(Socket, RequestRaw, State)
     );
+%% Игнорим, т.к. отправка ответа идемпотентна. С процессом сессии пока ничего не делаем.
+handle_info({tcp_closed, _Socket}, State) ->
+    {noreply, State};
 handle_info(_Info, State) ->
     ?LOG_WARNING("Unknown MSG:~p", [_Info]),
     {noreply, State}.
@@ -161,7 +164,6 @@ handle_request(_Socket, _RequestRaw, State = #state{}) ->
 
 %% Если старый сокет - то игнор: коннекция закрыта клиентом или сломалась до завершения сессии - ответ не нужно отдавать.
 %% Попробовать отдать ответ, наверху через continue устанавливаем новый сокет
-%% TODO надо добавить нормальное логгирование: запрос с таким-то Id зафейлился
 send_response_(Socket, Response, _State = #state{socket = Socket}) ->
     gen_tcp:send(Socket, Response),
     gen_tcp:close(Socket),
