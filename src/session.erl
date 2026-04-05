@@ -133,12 +133,41 @@ terminate(Reason, State) ->
 %%%===================================================================
 
 handle_request(RequestRaw, State) ->
-    ParseRequest = fun(X) -> either:right(X) end,
+    ParseRequest =
+        fun(X) ->
+            #{req := Req} = X,
+            try json:decode(Req) of
+                #{<<"request">> := _} = Req2 ->
+                    ?LOG_DEBUG("Got valid Req:~p", [Req2]),
+                    either:right(X#{req => Req2});
+                _Json ->
+                    either:left(X#{
+                        response => response:error_response(
+                            <<"Json is not a valid request"/utf8>>
+                        )
+                    })
+            catch
+                Err:Reason:StackTrace ->
+                    Msg =
+                        unicode:characters_to_binary(
+                            erl_error:format_exception(Err, Reason, StackTrace)
+                        ),
+                    either:left(X#{
+                        response => response:error_response(Msg)
+                    })
+            end
+        end,
     ProcessRequest = fun(X) -> either:right(X) end,
     SendResponse =
         fun(X) ->
-            #{state := #state{socket_pid = SocketPid, socket = Socket} = State} = X,
-            socket_handler:send_response(SocketPid, Socket, <<"pong"/utf8>>),
+            #{
+                state := #state{socket_pid = SocketPid, socket = Socket} = State,
+                response := Response
+            } = X,
+            ?LOG_DEBUG("Response:~p", [Response]),
+            %% Even if client sends bad response terminate/1 will handle this
+            Msg = unicode:characters_to_binary(json:encode(Response)),
+            socket_handler:send_response(SocketPid, Socket, Msg),
             ?LOG_DEBUG("Sent Response to Socket:~p", [Socket]),
             ok
         end,
