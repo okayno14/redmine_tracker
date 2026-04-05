@@ -53,6 +53,7 @@ start_link(SocketPid, Socket, RequestRaw) ->
         {continue, {handle_request, RequestRaw :: unicode:unicode_binary()}}}.
 %%--------------------------------------------------------------------
 init({SocketPid, Socket, RequestRaw}) ->
+    erlang:process_flag(trap_exit, true),
     {ok,
         #state{socket_pid = SocketPid, socket = Socket},
         {continue, {handle_request, RequestRaw}}
@@ -96,8 +97,35 @@ handle_info(_Info, State) ->
 -spec terminate(Reason :: term(), State :: state()) ->
     ok.
 %%--------------------------------------------------------------------
-terminate(_Reason, _State) ->
-    ok.
+terminate(normal, _State) ->
+    ok;
+terminate(shutdown, _State) ->
+    ok;
+terminate({shutdown, _}, _State) ->
+    ok;
+%% If unexpected exception happens - we must send error to socket for connection close
+terminate(Reason, State) ->
+    ?LOG_ERROR("Reason:~p", [Reason]),
+    #state{socket_pid = SocketPid, socket = Socket} = State,
+    StackTrace =
+        case erlang:process_info(erlang:self(), current_stacktrace) of
+            ST when is_list(ST) -> ST;
+            _ -> []
+        end,
+    Msg =
+        case
+            unicode:characters_to_binary(
+                erl_error:format_exception(error, Reason, StackTrace)
+            )
+        of
+            Msg2 when is_binary(Msg2) -> Msg2;
+            _ -> <<"Unknown session crash"/utf8>>
+        end,
+    socket_handler:send_response(
+        SocketPid,
+        Socket,
+        unicode:characters_to_binary(json:encode(response:error_response(Msg)))
+    ).
 %%--------------------------------------------------------------------
 
 %%%===================================================================
