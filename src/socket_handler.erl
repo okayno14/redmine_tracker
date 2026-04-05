@@ -49,10 +49,11 @@ start_link(ListenSocket) ->
 %%--------------------------------------------------------------------
 init({ListenSocket}) ->
     State = #state{listen_socket = ListenSocket},
-    {ok, State, {continue, {accept, ListenSocket}}}.
+    {ok, State, {continue, accept}}.
 %%--------------------------------------------------------------------
 
-handle_continue({accept, ListenSocket}, State) ->
+handle_continue(accept, State) ->
+    #state{listen_socket = ListenSocket} = State,
     {ok, Socket} = gen_tcp:accept(ListenSocket),
     {noreply, State#state{socket = Socket}}.
 
@@ -78,12 +79,15 @@ handle_cast(_Request, State) ->
 %%--------------------------------------------------------------------
 %% @doc
 -spec handle_info(Info :: term(), State :: state()) ->
-    {noreply, State :: state()}.
+    {noreply, State :: state()} | {noreply, State :: state(), {continue, accept}}.
 %%--------------------------------------------------------------------
 handle_info({tcp, Socket, RequestRaw}, State = #state{socket = Socket}) ->
-    %% TODO если не удалось заспавнить сессию, то надо закрыть коннекцию
-    supervisor:start_child(session_sup, [erlang:self(), RequestRaw]),
-    {noreply, State};
+    compose:if_else(
+        fun either:is_right/1,
+        fun(X) -> {noreply, either:extract(X)} end,
+        fun(X) -> {noreply, either:extract(X), {continue, accept}} end,
+        handle_request(RequestRaw, State)
+    );
 handle_info(_Info, State) ->
     ?LOG_WARNING("Unknown MSG:~p", [_Info]),
     {noreply, State}.
@@ -99,11 +103,33 @@ terminate(_Reason, _State) ->
 %%--------------------------------------------------------------------
 
 %%%===================================================================
-%%% gen_server_controller
+%%% state_composed
 %%%===================================================================
 
-%%%===================================================================
-%%% state api
-%%%===================================================================
-
+handle_request(RequestRaw, State) ->
+    Session =
+        fun(X) ->
+            case supervisor:start_child(session_sup, [erlang:self(), RequestRaw]) of
+                {ok, _} -> either:right(X);
+                {ok, _, _} -> either:right(X);
+                {error, Reason} -> either:left({X, {error, Reason}})
+            end
+        end,
+    compose:compose(
+        [
+            fun(Either) ->
+                either:cata(
+                    Either,
+                    fun({X, Err}) ->
+                        ?LOG_WARNING("Failed to spawn session by Error:~p", [Err]),
+                        gen_tcp:close(X#state.socket),
+                        X
+                    end,
+                    fun(X) -> X end
+                )
+            end,
+            fun(Either) -> either:flatmap(Either, Session) end
+        ],
+        either:right(State)
+    ).
 
