@@ -3,10 +3,17 @@
   {git,"https://github.com/okayno14/erl_utils.git",
        {ref,"55af8ad78e20d82263e1003fd7a6ada2fc8d1f98"}},
   0},
- {<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0}]}.
+ {<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0},
+ {<<"observer_cli">>,
+  {git,"https://github.com/zhongwencool/observer_cli.git",
+       {ref,"aed263eae30da9b28ff6365a95568dd2764e18ad"}},
+  0},
+ {<<"recon">>,{pkg,<<"recon">>,<<"2.5.6">>},1}]}.
 [
 {pkg_hash,[
- {<<"meck">>, <<"E65A3D84D7B418AFCB2C8EFDE2B5106A98EEFB7FE8E5F7E324FE9765122AEFA2">>}]},
+ {<<"meck">>, <<"E65A3D84D7B418AFCB2C8EFDE2B5106A98EEFB7FE8E5F7E324FE9765122AEFA2">>},
+ {<<"recon">>, <<"9052588E83BFEDFD9B72E1034532AEE2A5369D9D9343B61AEB7FBCE761010741">>}]},
 {pkg_hash_ext,[
- {<<"meck">>, <<"0FDFBD4D4F9EB9251BA621F4740A6E450E2A7D0E5E07A37830C5CF632F2CA8BB">>}]}
+ {<<"meck">>, <<"0FDFBD4D4F9EB9251BA621F4740A6E450E2A7D0E5E07A37830C5CF632F2CA8BB">>},
+ {<<"recon">>, <<"96C6799792D735CC0F0FD0F86267E9D351E63339CBE03DF9D162010CEFC26BB0">>}]}
 ].
