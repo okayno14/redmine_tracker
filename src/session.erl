@@ -107,6 +107,7 @@ terminate({shutdown, _}, _State) ->
 terminate(Reason, State) ->
     ?LOG_ERROR("Reason:~p", [Reason]),
     #state{socket_pid = SocketPid, socket = Socket} = State,
+    %% TODO refactor
     StackTrace =
         case erlang:process_info(erlang:self(), current_stacktrace) of
             ST when is_list(ST) -> ST;
@@ -124,7 +125,9 @@ terminate(Reason, State) ->
     socket_handler:send_response(
         SocketPid,
         Socket,
-        unicode:characters_to_binary(json:encode(response:error_response(Msg)))
+        unicode:characters_to_binary(
+            json:encode(response:error_response(session_crashed, Msg))
+        )
     ).
 %%--------------------------------------------------------------------
 
@@ -143,7 +146,8 @@ handle_request(RequestRaw, State) ->
                 _Json ->
                     either:left(X#{
                         response => response:error_response(
-                            <<"Json is not a valid request"/utf8>>
+                            invalid_json,
+                            <<"JSON not a request">>
                         )
                     })
             catch
@@ -153,13 +157,14 @@ handle_request(RequestRaw, State) ->
                             erl_error:format_exception(Err, Reason, StackTrace)
                         ),
                     either:left(X#{
-                        response => response:error_response(Msg)
+                        response => response:error_response(invalid_json, Msg)
                     })
             end
         end,
     ProcessRequest = fun(X) -> either:right(X) end,
     SendResponse =
         fun(X) ->
+            %% TODO refactor
             #{
                 state := #state{socket_pid = SocketPid, socket = Socket} = State,
                 response := Response
