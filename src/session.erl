@@ -6,7 +6,7 @@
 -define(TIMEOUT, infinity).
 
 %% api
--export([start_link/3]).
+-export([start_link/4]).
 
 %% gen_server
 -export([
@@ -19,6 +19,7 @@
 ]).
 
 -record(state, {
+    controller,
     socket_pid,
     socket
 }).
@@ -32,12 +33,17 @@
 %%--------------------------------------------------------------------
 %% @doc
 -spec start_link(
-    SocketPid :: pid(), Socket :: pid(), RequestRaw :: unicode:unicode_binary()
+    Controller :: module(),
+    SocketPid :: pid(),
+    Socket :: pid(),
+    RequestRaw :: unicode:unicode_binary()
 ) ->
     {ok, pid()} | {error, {already_started, pid()}} | {error, Reason :: any()}.
 %%--------------------------------------------------------------------
-start_link(SocketPid, Socket, RequestRaw) ->
-    {ok, _Pid} = gen_server:start_link(?MODULE, {SocketPid, Socket, RequestRaw}, []).
+start_link(Controller, SocketPid, Socket, RequestRaw) ->
+    {ok, _Pid} = gen_server:start_link(
+        ?MODULE, {Controller, SocketPid, Socket, RequestRaw}, []
+    ).
 %%--------------------------------------------------------------------
 
 %%%===================================================================
@@ -47,15 +53,18 @@ start_link(SocketPid, Socket, RequestRaw) ->
 %%--------------------------------------------------------------------
 %% @doc
 -spec init({
-    SocketPid :: pid(), Socket :: pid(), RequestRaw :: unicode:unicode_binary()
+    Controller :: module(),
+    SocketPid :: pid(),
+    Socket :: pid(),
+    RequestRaw :: unicode:unicode_binary()
 }) ->
     {ok, state(),
         {continue, {handle_request, RequestRaw :: unicode:unicode_binary()}}}.
 %%--------------------------------------------------------------------
-init({SocketPid, Socket, RequestRaw}) ->
+init({Controller, SocketPid, Socket, RequestRaw}) ->
     erlang:process_flag(trap_exit, true),
     {ok,
-        #state{socket_pid = SocketPid, socket = Socket},
+        #state{controller = Controller, socket_pid = SocketPid, socket = Socket},
         {continue, {handle_request, RequestRaw}}
     }.
 %%--------------------------------------------------------------------
@@ -107,12 +116,6 @@ terminate({shutdown, _}, _State) ->
 terminate({Reason, StackTrace}, State) ->
     ?LOG_ERROR("Reason:~p", [Reason]),
     #state{socket_pid = SocketPid, socket = Socket} = State,
-    %% TODO refactor
-    StackTrace =
-        case erlang:process_info(erlang:self(), current_stacktrace) of
-            ST when is_list(ST) -> ST;
-            _ -> []
-        end,
     Msg =
         unicode:characters_to_binary(
             erl_error:format_exception(error, Reason, StackTrace)
@@ -144,32 +147,41 @@ handle_request(RequestRaw, State) ->
     ParseRequest =
         fun(X) ->
             #{req := Req} = X,
-            try json:decode(Req) of
-                #{<<"request">> := _} = Req2 ->
-                    ?LOG_DEBUG("Got valid Req:~p", [Req2]),
-                    either:right(X#{req => Req2});
-                _Json ->
+            try request:decode(Req) of
+                {error, not_request} ->
                     either:left(X#{
                         response => response:error_response(
                             invalid_json,
                             <<"JSON not a request">>
                         )
-                    })
+                    });
+                Req2 ->
+                    ?LOG_DEBUG("Got valid Req:~p", [Req2]),
+                    either:right(X#{req => Req2})
             catch
                 Err:Reason:StackTrace ->
                     Msg =
                         unicode:characters_to_binary(
                             erl_error:format_exception(Err, Reason, StackTrace)
                         ),
+                    %% for eqwalizer
+                    true = is_binary(Msg),
                     either:left(X#{
                         response => response:error_response(invalid_json, Msg)
                     })
             end
         end,
-    ProcessRequest = fun(X) -> either:right(X) end,
+    ProcessRequest =
+        fun(X) ->
+            #{state := State, req := Req} = X,
+            #state{controller = Controller} = State,
+            %% TODO поменять на лямбду, т.к. потом будет проще отслеживать
+            %% TODO добавить отлов ошибок
+            Resp = Controller:route(Req),
+            either:right(X#{response => Resp})
+        end,
     SendResponse =
         fun(X) ->
-            %% TODO refactor
             #{
                 state := #state{socket_pid = SocketPid, socket = Socket} = State,
                 response := Response

@@ -124,18 +124,15 @@ terminate(_Reason, _State) ->
 handle_request(Socket, RequestRaw, State = #state{socket = Socket}) ->
     Session =
         fun(X) ->
-            %% TODO вынести в api session_sup
-            case
-                supervisor:start_child(session_sup, [
+            either:cata(
+                session_sup:start_session(
                     erlang:self(),
                     Socket,
                     RequestRaw
-                ])
-            of
-                {ok, _} -> either:right(X);
-                {ok, _, _} -> either:right(X);
-                {error, Reason} -> either:left({X, {error, Reason}})
-            end
+                ),
+                fun({error, Reason}) -> {X, {error, Reason}} end,
+                fun(ok) -> X end
+            )
         end,
     compose:compose(
         [

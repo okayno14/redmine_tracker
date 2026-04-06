@@ -30,7 +30,7 @@ init([]) ->
         },
         #{
             id => session_sup,
-            start => {session_sup, start_link, []},
+            start => {session_sup, start_link, [redmine_tracker_controller]},
             type => supervisor
         }
     ],
