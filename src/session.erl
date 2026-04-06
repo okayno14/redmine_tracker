@@ -104,7 +104,7 @@ terminate(shutdown, _State) ->
 terminate({shutdown, _}, _State) ->
     ok;
 %% If unexpected exception happens - we must send error to socket for connection close
-terminate(Reason, State) ->
+terminate({Reason, StackTrace}, State) ->
     ?LOG_ERROR("Reason:~p", [Reason]),
     #state{socket_pid = SocketPid, socket = Socket} = State,
     %% TODO refactor
@@ -114,21 +114,26 @@ terminate(Reason, State) ->
             _ -> []
         end,
     Msg =
-        case
-            unicode:characters_to_binary(
-                erl_error:format_exception(error, Reason, StackTrace)
-            )
-        of
-            Msg2 when is_binary(Msg2) -> Msg2;
-            _ -> <<"Unknown session crash"/utf8>>
-        end,
+        unicode:characters_to_binary(
+            erl_error:format_exception(error, Reason, StackTrace)
+        ),
+    %% for eqwalizer
+    true = is_binary(Msg),
     socket_handler:send_response(
         SocketPid,
         Socket,
         unicode:characters_to_binary(
             json:encode(response:error_response(session_crashed, Msg))
         )
-    ).
+    ),
+    ?LOG_DEBUG("Reason sent to ~p ~p", [SocketPid, Socket]),
+    ok;
+terminate(Reason, State) ->
+    ?LOG_ERROR("Reason:~p", [Reason]),
+    #state{socket_pid = SocketPid, socket = Socket} = State,
+    {current_stacktrace, StackTrace} =
+        erlang:process_info(erlang:self(), current_stacktrace),
+    terminate({Reason, StackTrace}, State).
 %%--------------------------------------------------------------------
 
 %%%===================================================================
