@@ -35,18 +35,25 @@ ensure_all_ready() ->
 %% @end
 -spec transaction(Fun :: fun(() -> Res)) ->
     either:either(
+        %% if throw happened in transaction
         {throw, Reason :: dynamic()}
-        | {Reason2 :: dynamic(), StackTrace :: erlang:stacktrace()},
+        %% if error happened in transaction
+        | {Reason :: dynamic(), StackTrace :: erlang:stacktrace()}
+        %% unknown mnesia exception
+        | Reason :: dynamic(),
         Res
     ).
 %%--------------------------------------------------------------------
 transaction(Fun) ->
     case mnesia:transaction(Fun) of
-        {atomic, Res} -> either:right(Res);
-        %% cause mnesia:transaction/1 doesn't have propper spec, then we match exactly results for fail-fast debug
-        {aborted, {throw, _Reason} = Res} -> either:left(Res);
-        %% cause mnesia:transaction/1 doesn't have propper spec, then we match exactly results for fail-fast debug
-        {aborted, {_Reason, StackTrace} = Res} when is_list(StackTrace) -> either:left(Res)
+        {atomic, Res} ->
+            either:right(Res);
+        {aborted, {throw, _Reason} = Res} ->
+            either:left(Res);
+        {aborted, {_Reason, StackTrace} = Res} when is_list(StackTrace) ->
+            either:left(Res);
+        {aborted, Reason} ->
+            either:left(Reason)
     end.
 %%--------------------------------------------------------------------
 

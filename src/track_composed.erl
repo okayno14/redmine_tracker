@@ -323,6 +323,7 @@ push_to_redmine() ->
 %% @doc For aborting db transaction
 % -spec either_throw(Either :: either:either(dynamic(), V)) ->
 %     V.
+%% TODO перенести в db, описать, что эта функция нужна для прокидывания Either из транзакции Mnesia
 either_throw(Either) ->
     compose:if_else(
         fun either:is_right/1,
