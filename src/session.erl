@@ -175,9 +175,7 @@ handle_request(RequestRaw, State) ->
         fun(X) ->
             #{state := State, req := Req} = X,
             #state{controller = Controller} = State,
-            %% TODO поменять на лямбду, т.к. потом будет проще отслеживать
-            %% TODO добавить отлов ошибок
-            Resp = Controller:route(Req),
+            Resp = controller:route(Controller, Req),
             either:right(X#{response => Resp})
         end,
     SendResponse =
