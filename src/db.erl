@@ -6,7 +6,8 @@
     start/0,
     init/0,
     ensure_all_ready/0,
-    transaction/1
+    transaction/1,
+    either_throw/1
 ]).
 
 start() ->
@@ -55,5 +56,24 @@ transaction(Fun) ->
         {aborted, Reason} ->
             either:left(Reason)
     end.
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+%% @doc
+%% <pre>
+%% For aborting db transaction.
+%% Allows to bypass either type from transaction to transaction-caller with using db:transaction/1
+%% </pre>
+%% @end
+-spec either_throw(Either :: either:either(_Error, Ok)) ->
+    Ok.
+%%--------------------------------------------------------------------
+either_throw(Either) ->
+    compose:if_else(
+        fun either:is_right/1,
+        fun either:extract/1,
+        fun(X2) -> erlang:throw(either:extract(X2)) end,
+        Either
+    ).
 %%--------------------------------------------------------------------
 

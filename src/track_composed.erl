@@ -33,7 +33,7 @@ begin_track(ProjectID, ActivityDesc, Task, Desc) ->
     F = fun() ->
         compose:compose(
             [
-                fun either_throw/1,
+                fun db:either_throw/1,
                 fun(X) -> either:map(X, fun track:set/1) end,
                 fun(X) ->
                     either:flatmap(
@@ -105,7 +105,7 @@ end_track_last() ->
     F = fun() ->
         compose:compose(
             [
-                fun either_throw/1,
+                fun db:either_throw/1,
                 %% TODO надо сделать каррирование для функций монад, можно красиво композиции писать
                 fun(X) -> either:map(X, fun track:set/1) end,
                 %% TODO сплитануть на 2 функции, чтобы: если негативная разница, то юзер поправил ошибку руками, если больше дня - то сделать сплит таски
@@ -318,17 +318,5 @@ push_to_redmine() ->
             end
         ],
         #{}
-    ).
-
-%% @doc For aborting db transaction
-% -spec either_throw(Either :: either:either(dynamic(), V)) ->
-%     V.
-%% TODO перенести в db, описать, что эта функция нужна для прокидывания Either из транзакции Mnesia
-either_throw(Either) ->
-    compose:if_else(
-        fun either:is_right/1,
-        fun either:extract/1,
-        fun(X2) -> erlang:throw(either:extract(X2)) end,
-        Either
     ).
 
