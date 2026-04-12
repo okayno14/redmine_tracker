@@ -17,6 +17,15 @@
 %% TODO проработать формат ошибок
 %% Создать новый объект track в состоянии tracking с текущим системным временем начала
 %% Положить в базу
+-spec begin_track(
+    ProjectID :: unicode:unicode_binary(),
+    ActivityDesc :: unicode:unicode_binary(),
+    Task :: unicode:unicode_binary(),
+    Desc :: unicode:unicode_binary()
+) ->
+    {'atomic', ok}
+    | {'aborted',
+        {throw, {error, Msg :: unicode:unicode_binary()} | track:validate_err()}}.
 begin_track(ProjectID, ActivityDesc, Task, Desc) ->
     F = fun() ->
         compose:compose(
@@ -311,6 +320,7 @@ push_to_redmine() ->
         #{}
     ).
 
+%% @doc For aborting db transaction
 either_throw(Either) ->
     compose:if_else(
         fun either:is_right/1,

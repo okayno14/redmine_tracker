@@ -53,7 +53,8 @@
 
 -export_type([
     track/0,
-    from_csv_err/0
+    from_csv_err/0,
+    validate_err/0
 ]).
 
 -opaque track() :: #track{}.
@@ -111,8 +112,8 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
     }.
 
 %%--------------------------------------------------------------------
--spec validate(Track :: track()) ->
-    ErrorList :: [
+-type validate_err() ::
+    [
         validate_id_err()
         | validate_project_id_err()
         | validate_activity_err()
@@ -121,6 +122,9 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
         | validate_timestamps_err()
         | validate_desc_err()
     ].
+
+-spec validate(Track :: track()) ->
+    validate_err().
 %%--------------------------------------------------------------------
 validate(Track = #track{}) ->
     L = ?R2L(Track, track),
@@ -873,6 +877,8 @@ inc_id(Inc) ->
 get(ID) ->
     mnesia:read({track, ID}).
 
+-spec set(track()) ->
+    ok.
 set(Track = #track{}) ->
     mnesia:write(Track).
 
