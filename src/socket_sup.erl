@@ -21,7 +21,10 @@ init([]) ->
         period => 5
     },
     {ok, Socket} = application:get_env(socket),
-    ok = file:delete(Socket),
+    case file:delete(Socket) of
+        ok -> ok;
+        {error, enoent} -> ok
+    end,
     {ok, ListenSocket} =
         gen_tcp:listen(
             0,
