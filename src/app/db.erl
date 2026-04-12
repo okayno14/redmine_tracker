@@ -10,6 +10,10 @@
     either_throw/1
 ]).
 
+-export_type([
+    transaction_ret/0
+]).
+
 start() ->
     mnesia:create_schema([erlang:node()], []),
     mnesia:start(),
@@ -34,7 +38,10 @@ ensure_all_ready() ->
 %% erlang:exit is forbidden (cause mnesia used them for communication)!
 %% </pre>
 %% @end
--spec transaction(Fun :: fun(() -> Res)) ->
+-type transaction_ret() ::
+    transaction_ret(dynamic()).
+
+-type transaction_ret(Res) ::
     either:either(
         %% if throw happened in transaction
         {throw, Reason :: dynamic()}
@@ -44,6 +51,9 @@ ensure_all_ready() ->
         | Reason :: dynamic(),
         Res
     ).
+
+-spec transaction(Fun :: fun(() -> Res)) ->
+    transaction_ret(Res).
 %%--------------------------------------------------------------------
 transaction(Fun) ->
     case mnesia:transaction(Fun) of

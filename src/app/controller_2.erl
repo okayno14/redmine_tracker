@@ -7,10 +7,10 @@
 
 -callback route(request:request()) ->
     {
-        Transaction :: fun(() -> either:either(Error, Res)),
+        Transaction :: fun(() -> db:transaction_ret()),
         %% Either - db-transaction status
         HappyPath :: fun(
-            (Either :: either:either(Error, Res)) -> response:response() | nomatch
+            (Either :: db:transaction_ret()) -> response:response() | nomatch
         )
     }.
 
