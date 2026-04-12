@@ -22,6 +22,7 @@ init([]) ->
         intensity => 1,
         period => 5
     },
+    %% TODO move to unix_socket_framework_sup when extracting to another library
     ChildSpecs = [
         #{
             id => socket_sup,
