@@ -24,6 +24,7 @@ route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),
     response:ok_response(<<"ok">>).
 
+%% TODO move to inner controller code after type specification of track_composed
 process_transaction(Transaction, HappyPath) ->
     ErrorResponse = fun
         ({aborted, {Reason, ST}}) when is_list(ST) ->
