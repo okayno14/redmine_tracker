@@ -13,32 +13,34 @@ route(#{request := <<"export_to_csv">>}) ->
         fun() ->
             track_composed:export_to_csv()
         end,
-        fun
-            ({atomic, CSV}) ->
-                response:ok_response(CSV);
-            (_) ->
-                nomatch
+        fun(Either) ->
+            case {either:is_right(Either), either:extract(Either)} of
+                {true, CSV} -> response:ok_response(CSV);
+                _ -> nomatch
+            end
         end
     );
 route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),
     response:ok_response(<<"ok">>).
 
-%% TODO move to inner controller code after type specification of track_composed
+%% TODO change spec for controller behaviour. Make controller-decorator (function in controller-module), that uses new controller (returns funs) and transforms it to responses
 process_transaction(Transaction, HappyPath) ->
-    ErrorResponse = fun
-        ({aborted, {Reason, ST}}) when is_list(ST) ->
-            response:error_response(
-                transaction_failed,
-                unicode:characters_to_binary(
-                    erl_error:format_exception(error, Reason, ST)
+    ErrorResponse = fun(Either) ->
+        case either:extract(Either) of
+            {Reason, ST} when is_list(ST) ->
+                response:error_response(
+                    transaction_failed,
+                    unicode:characters_to_binary(
+                        erl_error:format_exception(error, Reason, ST)
+                    )
+                );
+            {throw, Reason} ->
+                response:error_response(
+                    transaction_failed,
+                    unicode:characters_to_binary(io_lib:format("~p", [Reason]))
                 )
-            );
-        ({aborted, Reason}) ->
-            response:error_response(
-                transaction_failed,
-                unicode:characters_to_binary(io_lib:format("~p", [Reason]))
-            )
+        end
     end,
     Ret = Transaction(),
     case HappyPath(Ret) of

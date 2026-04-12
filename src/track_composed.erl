@@ -23,9 +23,12 @@
     Task :: unicode:unicode_binary(),
     Desc :: unicode:unicode_binary()
 ) ->
-    {'atomic', ok}
-    | {'aborted',
-        {throw, {error, Msg :: unicode:unicode_binary()} | track:validate_err()}}.
+    either:either(
+        {throw, {error, Msg :: unicode:unicode_binary()}}
+        | {throw, track:validate_err()}
+        | {Reason :: term(), erlang:stacktrace()},
+        ok
+    ).
 begin_track(ProjectID, ActivityDesc, Task, Desc) ->
     F = fun() ->
         compose:compose(
@@ -261,10 +264,7 @@ push_to_redmine() ->
                 either:flatmap(
                     Either,
                     fun(Tracks) ->
-                        case db:transaction(fun() -> [track:delete(Track) || Track <- Tracks] end) of
-                            {atomic, _} -> either:right(ok);
-                            {aborted, Reason} -> either:left({error, {db_clean, Reason}})
-                        end
+                        db:transaction(fun() -> [track:delete(Track) || Track <- Tracks] end)
                     end
                 )
             end,
@@ -310,17 +310,19 @@ push_to_redmine() ->
                 )
             end,
             fun(X) ->
-                ?LOG_DEBUG("a"),
-                case db:transaction(fun tracks:all/0) of
-                    {atomic, Tracks} -> either:right(X#{tracks => Tracks});
-                    {aborted, Reason} -> either:left({error, {db_fetch, Reason}})
-                end
+                either:cata(
+                    db:transaction(fun tracks:all/0),
+                    fun(Reason) -> {error, {db_fetch, Reason}} end,
+                    fun(Tracks) -> X#{tracks => Tracks} end
+                )
             end
         ],
         #{}
     ).
 
 %% @doc For aborting db transaction
+% -spec either_throw(Either :: either:either(dynamic(), V)) ->
+%     V.
 either_throw(Either) ->
     compose:if_else(
         fun either:is_right/1,
