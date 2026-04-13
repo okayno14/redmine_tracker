@@ -18,6 +18,18 @@ route(#{request := <<"export_to_csv">>}) ->
             end
         end
     };
+route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
+    {
+        fun() ->
+            track_composed:import_from_csv(CSV)
+        end,
+        fun(Either) ->
+            case {either:is_right(Either), either:extract(Either)} of
+                {true, ok} -> response:ok_response(CSV);
+                _ -> nomatch
+            end
+        end
+    };
 route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),
     {

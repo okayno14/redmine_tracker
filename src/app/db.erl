@@ -44,10 +44,10 @@ ensure_all_ready() ->
     transaction_ret(dynamic()).
 
 -type transaction_ret(Res) ::
-    transaction_ret(Res, Err :: dynamic()).
+    transaction_ret(Err :: dynamic(), Res).
 
 %% describes Result and user's specified Error
--type transaction_ret(Res, Err) ::
+-type transaction_ret(Err, Res) ::
     either:either(
         %% if throw happened in transaction
         {throw, Err}

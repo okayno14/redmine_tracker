@@ -179,6 +179,14 @@ export_to_csv() ->
     db:transaction(F).
 %%--------------------------------------------------------------------
 
+%%--------------------------------------------------------------------
+-spec import_from_csv(CSV :: unicode:unicode_binary()) ->
+    db:transaction_ret(
+        tracks:from_csv_all_err()
+        | {error, Msg :: unicode:unicode_binary()},
+        ok
+    ).
+%%--------------------------------------------------------------------
 import_from_csv(CSV) when is_binary(CSV) ->
     F = fun() ->
         compose:compose(
@@ -191,7 +199,7 @@ import_from_csv(CSV) when is_binary(CSV) ->
                             LastID = track:last_id(),
                             compose:if_else(
                                 fun(X2) -> X2 > 0 end,
-                                fun(X2) -> track:inc_id(X2) end,
+                                fun(X2) -> track:inc_id(X2), ok end,
                                 fun(_X2) -> ok end,
                                 LastIDImported - LastID
                             )
@@ -237,6 +245,7 @@ import_from_csv(CSV) when is_binary(CSV) ->
         )
     end,
     db:transaction(F).
+%%--------------------------------------------------------------------
 
 push_to_redmine() ->
     Param =

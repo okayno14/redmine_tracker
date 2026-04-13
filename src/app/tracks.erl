@@ -17,14 +17,21 @@
     remove_all/0
 ]).
 
+-export_type([
+    from_csv_all_err/0
+]).
+
 -eqwalizer({nowarn_function, from_csv_all/2}).
 -eqwalizer({nowarn_function, all/0}).
 
 %%--------------------------------------------------------------------
+-type from_csv_all_err() ::
+    {error, bad_csv}
+    | {error, {bad_csv, Line :: unicode:unicode_binary()}, track:from_csv_err()}.
+
 -spec from_csv_all(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
     either:either(
-        {error, bad_csv}
-        | {error, {bad_csv, Line :: unicode:unicode_binary()}, track:from_csv_err()},
+        from_csv_all_err(),
         [track:track()]
     ).
 %%--------------------------------------------------------------------
