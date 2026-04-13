@@ -1,7 +1,7 @@
 {"1.2.0",
 [{<<"erl_utils">>,
   {git,"https://github.com/okayno14/erl_utils.git",
-       {ref,"55af8ad78e20d82263e1003fd7a6ada2fc8d1f98"}},
+       {ref,"730e601c0df8f82c62220bbcd991f42f7e70724b"}},
   0},
  {<<"meck">>,{pkg,<<"meck">>,<<"1.1.0">>},0},
  {<<"observer_cli">>,
