@@ -460,9 +460,9 @@ finish(Track, TsEnd) ->
 
 -spec from_csv(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
     either:either(
-            from_csv_err(),
-            track()
-        ).
+        from_csv_err(),
+        track()
+    ).
 from_csv(CSV, Activities) ->
     compose:compose(
         [
