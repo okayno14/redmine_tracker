@@ -149,8 +149,11 @@ end_track_last() ->
     end,
     db:transaction(F).
 
+%%--------------------------------------------------------------------
 %% TODO надо добавить сортировку по id
-%% TODO почему-то русские символы в Desc, возможно, что проблема была в моём вызове write_file, либо мнезиа как-то неправильно хранит track
+-spec export_to_csv() ->
+    db:transaction_ret(CSV :: unicode:unicode_binary()).
+%%--------------------------------------------------------------------
 export_to_csv() ->
     F = fun() ->
         compose:compose(
@@ -158,8 +161,10 @@ export_to_csv() ->
                 fun(TrackList) ->
                     lists:foldl(
                         fun
-                            (CSV, <<"">>) -> CSV;
-                            (CSV, Acc) -> <<Acc/binary, "\n", CSV/binary>>
+                            (CSV, <<"">>) ->
+                                CSV;
+                            (CSV, Acc) when is_binary(Acc), is_binary(CSV) ->
+                                <<Acc/binary, "\n", CSV/binary>>
                         end,
                         <<"">>,
                         [track:to_csv(Track) || Track <- TrackList]
@@ -170,8 +175,9 @@ export_to_csv() ->
             []
         )
     end,
-    %% можно сделать dirty-функцию
+    %% TODO можно сделать dirty-функцию
     db:transaction(F).
+%%--------------------------------------------------------------------
 
 import_from_csv(CSV) when is_binary(CSV) ->
     F = fun() ->

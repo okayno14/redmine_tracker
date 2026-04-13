@@ -11,7 +11,9 @@
 ]).
 
 -export_type([
-    transaction_ret/0
+    transaction_ret/0,
+    transaction_ret/1,
+    transaction_ret/2
 ]).
 
 start() ->
@@ -42,9 +44,13 @@ ensure_all_ready() ->
     transaction_ret(dynamic()).
 
 -type transaction_ret(Res) ::
+    transaction_ret(Res, Err :: dynamic()).
+
+%% describes Result and user's specified Error
+-type transaction_ret(Res, Err) ::
     either:either(
         %% if throw happened in transaction
-        {throw, Reason :: dynamic()}
+        {throw, Err}
         %% if error happened in transaction
         | {Reason :: dynamic(), StackTrace :: erlang:stacktrace()}
         %% unknown mnesia exception
