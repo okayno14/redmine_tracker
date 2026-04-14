@@ -25,8 +25,12 @@ route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of
-                {true, ok} -> response:ok_response(CSV);
-                _ -> nomatch
+                {true, ok} ->
+                    response:ok_response(CSV);
+                {false, {throw, {error, Msg}}} when is_binary(Msg) ->
+                    response:error_response(bad_import, Msg);
+                _ ->
+                    nomatch
             end
         end
     };
