@@ -191,6 +191,7 @@ import_from_csv(CSV) when is_binary(CSV) ->
     F = fun() ->
         compose:compose(
             [
+                fun db:either_throw/1,
                 fun(X) ->
                     either:map(
                         X,
