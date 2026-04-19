@@ -39,19 +39,18 @@ export_to_csv(#{}) ->
                 nomatch
         end,
     %% TODO можем откинуться из-за исключения
-    SendReq =
+    Req =
         fun() ->
-            send_req_2(json:encode(#{request => <<"export_to_csv">>}))
+            json:encode(#{request => <<"export_to_csv">>})
         end,
-    process_request(SendReq, ProcessResp).
+    process_request(Req, ProcessResp).
 
 import_from_csv(#{csv := <<"-">>}) ->
-    SendReq =
+    Req =
         fun() ->
             %% TODO можем откинуться из-за исключения
             CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
-            Json = json:encode(#{request => <<"import_from_csv">>, csv => CSV}),
-            send_req(Json)
+            json:encode(#{request => <<"import_from_csv">>, csv => CSV})
         end,
     ProcessResp =
         fun
@@ -60,15 +59,13 @@ import_from_csv(#{csv := <<"-">>}) ->
             (_) ->
                 nomatch
         end,
-    %% TODO надо переработать логику: если ok-ответ, то вызываем callback, если ошибка - то дефолтная печать
-    process_request(SendReq, ProcessResp);
+    process_request(Req, ProcessResp);
 import_from_csv(Args = #{csv := _File}) ->
     io:format("Args: ~p\n", [Args]).
 
-process_request(SendReq, ProcessResp) ->
+process_request(Req, ProcessResp) ->
     compose:compose(
         [
-            %% TODO все функции вызывают процедурно io:format. А что если каждая функция будет возвращать строку, а в конце сделаем печать?
             fun(X) ->
                 either:map(
                     X,
@@ -89,9 +86,10 @@ process_request(SendReq, ProcessResp) ->
                     end,
                     fun(X2) -> X2 end
                 )
-            end
+            end,
+            fun send_req/1
         ],
-        SendReq()
+        Req()
     ).
 
 -spec format_req_2_error(send_req_2_err()) ->
@@ -110,36 +108,11 @@ format_req_2_error({error, {recv, Reason}}) ->
         _ -> io:format("Failed to reccv by reason:~ts", [inet:format_error(Reason)])
     end.
 
-
 read_all_io(Device, Acc) ->
     io:setopts(standard_io, [binary]),
     case io:get_line(Device, "") of
         eof -> lists:reverse(Acc);
         String -> read_all_io(Device, [String | Acc])
-    end.
-
-%% TODO попробовать вытащить из конфиги
-send_req(Req) -> send_req(<<"/tmp/redmine_tracker.sock">>, Req).
-%% TODO переписать на either с отметками о месте возникновения ошибки,
-%% чтобы потом можно было прикрутить для ошибки дефолтный обработчик,
-%% а внутри функций обрабатывать resp
-%% TODO в обработчике Resp нужно также сделать кастомный код и общий код для дефолтных ошибок - стактрейсов и т.д.
-send_req(Path, Req) ->
-    maybe
-        {ok, Socket} ?=
-            gen_tcp:connect(
-                {local, Path},
-                0,
-                [
-                    {active, false},
-                    binary,
-                    {packet, 4}
-                ]
-            ),
-        ok ?= gen_tcp:send(Socket, Req),
-        {ok, Bin} ?= gen_tcp:recv(Socket, 0),
-        true ?= is_binary(Bin),
-        {ok, json:decode(Bin)}
     end.
 
 %% TODO вынести в unix_socket_framework в модуль response (сначала сделать from_json, который отбирает нужные поля и превращает в атомы)
@@ -156,29 +129,30 @@ format_resp(#{
 }) ->
     io:format("reason: ~ts\nmsg: ~ts", [Reason, Msg]).
 
-send_req_2(Req) ->
-    send_req_2(<<"/tmp/redmine_tracker.sock">>, Req).
+%% TODO попробовать вытащить из конфиги
+send_req(Req) ->
+    send_req(<<"/tmp/redmine_tracker.sock">>, Req).
 
 -type send_req_2_err() ::
     {error, {connect, Reason :: inet:posix()}}
     | {error, {send, closed | {timeout, RestData :: binary() | erlang:iovec()} | inet:posix()}}
     | {error, {recv, closed | inet:posix()}}.
 
--spec send_req_2(Path :: unicode:unicode_binary(), Req :: unicode:unicode_binary()) ->
+-spec send_req(Path :: unicode:unicode_binary(), Req :: unicode:unicode_binary()) ->
     either:either(
         send_req_2_err(),
         response:response()
     ).
 
-send_req_2(Path, Req) ->
+send_req(Path, Req) ->
     compose:compose(
         [
             fun(X) ->
                 either:map(
                     X,
                     fun(#{resp := Resp, socket := Socket}) ->
-                        %% TODO можем упасть из-за исключения
                         gen_tcp:close(Socket),
+                        %% TODO тут нужен парсинг json-ов в response
                         json:decode(Resp)
                     end
                 )
@@ -209,8 +183,7 @@ send_req_2(Path, Req) ->
                 either:flatmap(
                     X,
                     fun(#{path := Path2, req := Req2}) ->
-                        case gen_tcp:connect({local, Path2}, 0, [{active, false}, binary]) of
-                            %% TODO ?
+                        case gen_tcp:connect({local, Path2}, 0, [{active, false}, binary, {packet, 4}], 1000) of
                             {ok, Socket} -> either:right(#{socket => Socket, req => Req2});
                             {error, Reason} -> either:left({error, {connect, Reason}})
                         end
