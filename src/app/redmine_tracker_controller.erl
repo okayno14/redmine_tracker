@@ -29,6 +29,15 @@ route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
                     response:ok_response(CSV);
                 {false, {throw, {error, Msg}}} when is_binary(Msg) ->
                     response:error_response(bad_import, Msg);
+                {false, {throw, {bad_csv, Line}, Error}} ->
+                    response:error_response(
+                        bad_csv,
+                        unicode:characters_to_binary(
+                            io_lib:format("Bad csv-line:~p\nReason:~p", [Line, Error])
+                        )
+                    );
+                {false, {throw, bad_csv}} ->
+                    reponse:error_response(bad_csv, <<"unknown csv-error">>);
                 _ ->
                     nomatch
             end
