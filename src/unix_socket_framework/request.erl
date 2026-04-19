@@ -1,6 +1,6 @@
 -module(request).
 
--export([decode/1]).
+-export(['decode!'/1]).
 
 -export_type([request/0]).
 
@@ -11,7 +11,7 @@
     }.
 
 %% @doc Uses json, can generate erlang:error()
-decode(Binary) ->
+'decode!'(Binary) ->
     maybe
         Y = #{} ?= json:decode(Binary),
         {V, Y2} ?= maps:take(<<"request">>, Y),

@@ -147,7 +147,7 @@ handle_request(RequestRaw, State) ->
     ParseRequest =
         fun(X) ->
             #{req := Req} = X,
-            try request:decode(Req) of
+            try request:'decode!'(Req) of
                 {error, not_request} ->
                     either:left(X#{
                         response => response:error_response(

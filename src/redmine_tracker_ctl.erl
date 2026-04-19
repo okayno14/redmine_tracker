@@ -32,7 +32,7 @@ cli() ->
 export_to_csv(#{}) ->
     ProcessResp =
         fun
-            (#{<<"type">> := <<"ok">>, <<"data">> := CSV}) ->
+            (#{type := ok, data := CSV}) ->
                 io:format("~ts\n", [CSV]),
                 ok;
             (_) ->
@@ -54,7 +54,7 @@ import_from_csv(#{csv := <<"stdin">>}) ->
         end,
     ProcessResp =
         fun
-            (#{<<"type">> := <<"ok">>, <<"data">> := Data}) ->
+            (#{type := ok, data := Data}) ->
                 io:format("~ts\n", [Data]);
             (_) ->
                 nomatch
@@ -68,21 +68,21 @@ import_from_csv(#{csv := Path}) ->
                     CSV = unicode:characters_to_binary(Binary),
                     either:right(
                         %% TODO можем откинуться из-за исключения
+                        %% TODO заменить на либу request
                         json:encode(#{request => <<"import_from_csv">>, csv => CSV})
                     );
                 {error, Reason} ->
-                    either:left(#{
-                        <<"type">> => <<"error">>,
-                        <<"reason">> => <<"read_csv_file">>,
-                        <<"msg">> => unicode:characters_to_binary(
-                            file:format_error(Reason)
+                    either:left(
+                        response:error_response(
+                            read_csv_file,
+                            unicode:characters_to_binary(file:format_error(Reason))
                         )
-                    })
+                    )
             end
         end,
     ProcessResp =
         fun
-            (#{<<"type">> := <<"ok">>, <<"data">> := Data}) ->
+            (#{type := ok, data := Data}) ->
                 io:format("~ts\n", [Data]);
             (_) ->
                 nomatch
@@ -136,7 +136,9 @@ format_req_2_error({error, {recv, Reason}}) ->
     case Reason of
         closed -> io:format("Failed to recv, already closed", []);
         _ -> io:format("Failed to reccv by reason:~ts", [inet:format_error(Reason)])
-    end.
+    end;
+format_req_2_error({error, {resp, Resp, bad_response}}) ->
+    io:format("Got malformed response from server:\n~ts", [Resp]).
 
 read_all_io(Device, Acc) ->
     io:setopts(standard_io, [binary]),
@@ -148,14 +150,14 @@ read_all_io(Device, Acc) ->
 %% TODO вынести в unix_socket_framework в модуль response (сначала сделать from_json, который отбирает нужные поля и превращает в атомы)
 %% потом можно использовать эту функцию как в клиентах, так и в кишках фреймворка для красивой печати логов
 format_resp(#{
-    <<"type">> := <<"ok">>,
-    <<"data">> := Data
+    type := ok,
+    data := Data
 }) ->
     io:format("~p", [Data]);
 format_resp(#{
-    <<"type">> := <<"error">>,
-    <<"reason">> := Reason,
-    <<"msg">> := Msg
+    type := error,
+    reason := Reason,
+    msg := Msg
 }) ->
     io:format("reason: ~ts\nmsg: ~ts", [Reason, Msg]).
 
@@ -166,7 +168,8 @@ send_req(Req) ->
 -type send_req_2_err() ::
     {error, {connect, Reason :: inet:posix()}}
     | {error, {send, closed | {timeout, RestData :: binary() | erlang:iovec()} | inet:posix()}}
-    | {error, {recv, closed | inet:posix()}}.
+    | {error, {recv, closed | inet:posix()}}
+    | {error, {resp, Resp :: unicode:unicode_binary(), bad_response}}.
 
 -spec send_req(Path :: unicode:unicode_binary(), Req :: unicode:unicode_binary()) ->
     either:either(
@@ -178,12 +181,15 @@ send_req(Path, Req) ->
     compose:compose(
         [
             fun(X) ->
-                either:map(
+                either:flatmap(
                     X,
                     fun(#{resp := Resp, socket := Socket}) ->
                         gen_tcp:close(Socket),
-                        %% TODO тут нужен парсинг json-ов в response
-                        json:decode(Resp)
+                        either:cata(
+                            response:'decode!'(Resp),
+                            fun({error, bad_response}) -> {error, {resp, Resp, bad_response}} end,
+                            fun(X2) -> X2 end
+                        )
                     end
                 )
             end,

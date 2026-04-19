@@ -2,7 +2,8 @@
 
 -export([
     ok_response/1,
-    error_response/2
+    error_response/2,
+    'decode!'/1
 ]).
 
 -export_type([
@@ -51,4 +52,37 @@ error_response(Reason, Msg) ->
         reason => Reason,
         msg => Msg
     }.
+
+-spec 'decode!'(Binary :: unicode:unicode_binary()) ->
+    either:either(
+        {error, bad_response},
+        error_response() | ok_response()
+    ).
+'decode!'(Binary) ->
+    case json:decode(Binary) of
+        #{
+            <<"type">> := <<"error">>,
+            <<"reason">> := Reason,
+            <<"msg">> := Msg
+        } when is_binary(Reason), is_binary(Msg) ->
+            either:right(
+                #{
+                    type => error,
+                    reason => erlang:binary_to_atom(Reason),
+                    msg => Msg
+                }
+            );
+        #{
+            <<"type">> := <<"ok">>,
+            <<"data">> := Data
+        } when is_binary(Data) ->
+            either:right(
+                #{
+                    type => ok,
+                    data => Data
+                }
+            );
+        _ ->
+            either:left({error, bad_response})
+    end.
 
