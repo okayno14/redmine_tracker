@@ -30,7 +30,8 @@ init([]) ->
             0,
             [
                 {ifaddr, {local, Socket}},
-                {mode, binary}
+                {mode, binary},
+                {packet, 4}
             ]
         ),
     ChildSpecs = child_specs(ListenSocket),
