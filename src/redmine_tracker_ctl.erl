@@ -46,12 +46,22 @@ export_to_csv(#{}) ->
     process_request(SendReq, ProcessResp).
 
 import_from_csv(#{csv := <<"-">>}) ->
-    CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
-    {ok, Resp} = send_req(json:encode(#{request => <<"import_from_csv">>, csv => CSV})),
-    %% TODO нужна нормальная печать ошибок
-    %% TODO почему-то если 9 строк в csv, то json билдится ок, если 10 - то сервак говорит, что ошибка в парсинге json-а
-    #{<<"type">> := <<"ok">>, <<"data">> := Data} = Resp,
-    io:format("~ts\n", [Data]);
+    SendReq =
+        fun() ->
+            %% TODO можем откинуться из-за исключения
+            CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
+            Json = json:encode(#{request => <<"import_from_csv">>, csv => CSV}),
+            send_req(Json)
+        end,
+    ProcessResp =
+        fun
+            (#{<<"type">> := <<"ok">>, <<"data">> := Data}) ->
+                io:format("~ts\n", [Data]);
+            (_) ->
+                nomatch
+        end,
+    %% TODO надо переработать логику: если ok-ответ, то вызываем callback, если ошибка - то дефолтная печать
+    process_request(SendReq, ProcessResp);
 import_from_csv(Args = #{csv := _File}) ->
     io:format("Args: ~p\n", [Args]).
 
