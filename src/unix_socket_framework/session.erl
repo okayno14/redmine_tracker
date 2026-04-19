@@ -151,7 +151,7 @@ handle_request(RequestRaw, State) ->
                 {error, not_request} ->
                     either:left(X#{
                         response => response:error_response(
-                            invalid_json,
+                            invalid_json_request,
                             <<"JSON not a request">>
                         )
                     });
@@ -167,7 +167,7 @@ handle_request(RequestRaw, State) ->
                     %% for eqwalizer
                     true = is_binary(Msg),
                     either:left(X#{
-                        response => response:error_response(invalid_json, Msg)
+                        response => response:error_response(invalid_json_request, Msg)
                     })
             end
         end,
