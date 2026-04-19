@@ -19,9 +19,9 @@ cli() ->
                 arguments => [
                     #{
                         name => csv,
-                        default => <<"-">>,
+                        default => <<"stdin">>,
                         type => binary,
-                        help => <<"\"-\" - stdin or \"Path\" - path to csv-file">>
+                        help => <<"\"stdin\"  or \"Path\" - path to csv-file">>
                     }
                 ],
                 handler => fun import_from_csv/1
@@ -45,7 +45,7 @@ export_to_csv(#{}) ->
         end,
     process_request(Req, ProcessResp).
 
-import_from_csv(#{csv := <<"-">>}) ->
+import_from_csv(#{csv := <<"stdin">>}) ->
     Req =
         fun() ->
             %% TODO можем откинуться из-за исключения
