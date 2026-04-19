@@ -41,7 +41,7 @@ export_to_csv(#{}) ->
     %% TODO можем откинуться из-за исключения
     Req =
         fun() ->
-            json:encode(#{request => <<"export_to_csv">>})
+            either:right(json:encode(#{request => <<"export_to_csv">>}))
         end,
     process_request(Req, ProcessResp).
 
@@ -50,7 +50,7 @@ import_from_csv(#{csv := <<"stdin">>}) ->
         fun() ->
             %% TODO можем откинуться из-за исключения
             CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
-            json:encode(#{request => <<"import_from_csv">>, csv => CSV})
+            either:right(json:encode(#{request => <<"import_from_csv">>, csv => CSV}))
         end,
     ProcessResp =
         fun
@@ -60,8 +60,34 @@ import_from_csv(#{csv := <<"stdin">>}) ->
                 nomatch
         end,
     process_request(Req, ProcessResp);
-import_from_csv(Args = #{csv := _File}) ->
-    io:format("Args: ~p\n", [Args]).
+import_from_csv(#{csv := Path}) ->
+    Req =
+        fun() ->
+            case file:read_file(Path) of
+                {ok, Binary} ->
+                    CSV = unicode:characters_to_binary(Binary),
+                    either:right(
+                        %% TODO можем откинуться из-за исключения
+                        json:encode(#{request => <<"import_from_csv">>, csv => CSV})
+                    );
+                {error, Reason} ->
+                    either:left(#{
+                        <<"type">> => <<"error">>,
+                        <<"reason">> => <<"read_csv_file">>,
+                        <<"msg">> => unicode:characters_to_binary(
+                            file:format_error(Reason)
+                        )
+                    })
+            end
+        end,
+    ProcessResp =
+        fun
+            (#{<<"type">> := <<"ok">>, <<"data">> := Data}) ->
+                io:format("~ts\n", [Data]);
+            (_) ->
+                nomatch
+        end,
+    process_request(Req, ProcessResp).
 
 process_request(Req, ProcessResp) ->
     compose:compose(
@@ -78,16 +104,20 @@ process_request(Req, ProcessResp) ->
                 )
             end,
             fun(X) ->
-                either:cata(
-                    X,
-                    fun(X2) ->
-                        format_req_2_error(X2),
-                        X2
-                    end,
-                    fun(X2) -> X2 end
-                )
-            end,
-            fun send_req/1
+                case {either:is_right(X), either:extract(X)} of
+                    {true, Req2} ->
+                        either:cata(
+                            send_req(Req2),
+                            fun(X2) ->
+                                format_req_2_error(X2),
+                                X2
+                            end,
+                            fun(X2) -> X2 end
+                        );
+                    {false, _} ->
+                        either:swap(X)
+                end
+            end
         ],
         Req()
     ).
