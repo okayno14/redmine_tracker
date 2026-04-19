@@ -116,7 +116,16 @@ send_req(Req) -> send_req(<<"/tmp/redmine_tracker.sock">>, Req).
 %% TODO в обработчике Resp нужно также сделать кастомный код и общий код для дефолтных ошибок - стактрейсов и т.д.
 send_req(Path, Req) ->
     maybe
-        {ok, Socket} ?= gen_tcp:connect({local, Path}, 0, [{active, false}, binary]),
+        {ok, Socket} ?=
+            gen_tcp:connect(
+                {local, Path},
+                0,
+                [
+                    {active, false},
+                    binary,
+                    {packet, 4}
+                ]
+            ),
         ok ?= gen_tcp:send(Socket, Req),
         {ok, Bin} ?= gen_tcp:recv(Socket, 0),
         true ?= is_binary(Bin),
