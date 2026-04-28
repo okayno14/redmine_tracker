@@ -632,16 +632,28 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
                 {ssl, [{verify, verify_none}]},
                 {timeout, 5000}
             ],
-            _Options = []
+            _Options = [
+                %% Под капотом httpc использует erlang:binary_to_list/1
+                %% Сам binary_to_list корректно переводит числа =< 255, для x > 255 он в бинарь переводит только остаток от вычета 255
+                %% При этом сам redmine присылает utf8 ответы с кодами > 255
+                {body_format, binary}
+            ]
         )
     of
         {ok, Resp} ->
-            ?LOG_DEBUG("Response:~p", [Resp]),
+            ?LOG_DEBUG("Response:~ts", [format_resp(Resp)]),
             ok;
         {error, Reason} ->
             ?LOG_WARNING("Reason:~p", [Reason]),
             {error, Reason}
     end.
+
+%% TODO надо сделать ленивый вызов форматирования, т.к. операция довольно долгая, а получается так, что вне зависимости от статуса лога конвертация будет проходить
+%% TODO надо сделать красивое форматирование xml-ки, функция должна в качестве Body принимать готовую строку
+format_resp({StatusCode, Body}) ->
+    io_lib:format("~p\n~ts", [StatusCode, Body]);
+format_resp({StatusLine, Headers, Body}) ->
+    io_lib:format("~p\n~p\n~ts", [StatusLine, Headers, Body]).
 
 to_xml(Track, UserId) ->
     #track{
