@@ -10,7 +10,9 @@
         Transaction :: fun(() -> db:transaction_ret()),
         %% Either - db-transaction status
         HappyPath :: fun(
-            (Either :: db:transaction_ret()) -> response:response() | nomatch
+            (Either :: db:transaction_ret()) ->
+                response:response()
+                | nomatch
         )
     }.
 
@@ -20,25 +22,25 @@ route(Request) ->
     {Transaction, HappyPath} = redmine_tracker_controller:route(Request),
     DefaultHandler =
         fun(Either) ->
-            case {either:is_left(Either), either:extract(Either)} of
-                {true, {Reason, ST}} when is_list(ST) ->
+            case {either:is_right(Either), either:extract(Either)} of
+                {false, {Reason, ST}} when is_list(ST) ->
                     response:error_response(
                         transaction_failed,
                         unicode:characters_to_binary(
                             erl_error:format_exception(error, Reason, ST)
                         )
                     );
-                {true, {throw, Reason}} ->
+                {false, {throw, Reason}} ->
                     response:error_response(
                         transaction_failed,
                         unicode:characters_to_binary(io_lib:format("~p", [Reason]))
                     );
-                {true, Reason} ->
+                {false, Reason} ->
                     response:error_response(
                         transaction_failed,
                         unicode:characters_to_binary(io_lib:format("~p", [Reason]))
                     );
-                {false, X} ->
+                {true, X} ->
                     response:ok_response(io_lib:format("~p", [X]))
             end
         end,
