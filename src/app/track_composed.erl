@@ -133,7 +133,6 @@ end_track_last() ->
                 fun(_) ->
                     compose:if_else(
                         fun(X2) ->
-                            ?LOG_ERROR("~p", [X2]),
                             X2 == []
                         end,
                         fun(_) ->
