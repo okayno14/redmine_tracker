@@ -156,7 +156,7 @@ handle_request(RequestRaw, State) ->
                         )
                     });
                 Req2 ->
-                    ?LOG_DEBUG("Got valid Req:~p", [Req2]),
+                    ?LOG_DEBUG("Got valid Req:\n~p", [Req2]),
                     either:right(X#{req => Req2})
             catch
                 Err:Reason:StackTrace ->
@@ -201,4 +201,6 @@ handle_request(RequestRaw, State) ->
         ],
         either:right(#{req => RequestRaw, state => State, response => <<"">>})
     ).
+
+
 
