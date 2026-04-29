@@ -3,7 +3,8 @@
 -export([
     ok_response/1,
     error_response/2,
-    'decode!'/1
+    'decode!'/1,
+    format/1
 ]).
 
 -export_type([
@@ -53,6 +54,7 @@ error_response(Reason, Msg) ->
         msg => Msg
     }.
 
+%% TODO завернуть json в try-catch
 -spec 'decode!'(Binary :: unicode:unicode_binary()) ->
     either:either(
         {error, bad_response},
@@ -75,7 +77,7 @@ error_response(Reason, Msg) ->
         #{
             <<"type">> := <<"ok">>,
             <<"data">> := Data
-        } when is_binary(Data) ->
+        } ->
             either:right(
                 #{
                     type => ok,
@@ -86,3 +88,30 @@ error_response(Reason, Msg) ->
             either:left({error, bad_response})
     end.
 
+-spec format(response()) ->
+    unicode:unicode_binary().
+format(#{
+    type := ok,
+    data := Data
+}) when is_binary(Data) ->
+    X = unicode:characters_to_binary(io_lib:format("~ts", [Data])),
+    true = is_binary(X),
+    X;
+format(#{
+    type := ok,
+    data := Data
+}) ->
+    X = unicode:characters_to_binary(io_lib:format("~p", [Data])),
+    true = is_binary(X),
+    X;
+format(#{
+    type := error,
+    reason := Reason,
+    msg := Msg
+}) ->
+    X =
+        unicode:characters_to_binary(
+            io_lib:format("reason: ~ts\nmsg: ~ts", [Reason, Msg])
+        ),
+    true = is_binary(X),
+    X.

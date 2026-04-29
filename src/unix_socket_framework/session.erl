@@ -184,11 +184,13 @@ handle_request(RequestRaw, State) ->
                 state := #state{socket_pid = SocketPid, socket = Socket} = State,
                 response := Response
             } = X,
-            ?LOG_DEBUG("Response:~p", [Response]),
             %% Even if client sends bad response terminate/1 will handle this
             Msg = unicode:characters_to_binary(json:encode(Response)),
             socket_handler:send_response(SocketPid, Socket, Msg),
-            ?LOG_DEBUG("Sent Response to Socket:~p", [Socket]),
+            ?LOG_DEBUG(
+                "Sent to Socket:~p Response:\n~ts",
+                [Socket, response:format(Response)]
+            ),
             ok
         end,
     compose:compose(

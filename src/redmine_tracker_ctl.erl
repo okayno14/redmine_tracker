@@ -98,7 +98,7 @@ process_request(Req, ProcessResp) ->
                     fun(Resp) ->
                         case ProcessResp(Resp) of
                             ok -> ok;
-                            nomatch -> format_resp(Resp)
+                            nomatch -> io:format("~ts", [response:format(Resp)])
                         end
                     end
                 )
@@ -146,20 +146,6 @@ read_all_io(Device, Acc) ->
         eof -> lists:reverse(Acc);
         String -> read_all_io(Device, [String | Acc])
     end.
-
-%% TODO вынести в unix_socket_framework в модуль response (сначала сделать from_json, который отбирает нужные поля и превращает в атомы)
-%% потом можно использовать эту функцию как в клиентах, так и в кишках фреймворка для красивой печати логов
-format_resp(#{
-    type := ok,
-    data := Data
-}) ->
-    io:format("~p", [Data]);
-format_resp(#{
-    type := error,
-    reason := Reason,
-    msg := Msg
-}) ->
-    io:format("reason: ~ts\nmsg: ~ts", [Reason, Msg]).
 
 %% TODO попробовать вытащить из конфиги
 send_req(Req) ->
