@@ -168,7 +168,7 @@ send_req(Req) ->
     {error, {connect, Reason :: inet:posix()}}
     | {error, {send, closed | {timeout, RestData :: binary() | erlang:iovec()} | inet:posix()}}
     | {error, {recv, closed | inet:posix()}}
-    | {error, {resp, Resp :: unicode:unicode_binary(), response:decode_reason()}}.
+    | {error, {resp, Resp :: unicode:unicode_binary(), json2:decode_reason()}}.
 -spec send_req(Path :: unicode:unicode_binary(), Req :: unicode:unicode_binary()) ->
     either:either(
         send_req_2_err(),
