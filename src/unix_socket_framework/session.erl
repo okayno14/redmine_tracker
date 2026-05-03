@@ -147,27 +147,54 @@ handle_request(RequestRaw, State) ->
     ParseRequest =
         fun(X) ->
             #{req := Req} = X,
-            try request:'decode!'(Req) of
-                {error, not_request} ->
+            Either = request:decode(Req),
+            case {either:is_right(Either), either:extract(Either)} of
+                {true, Req2} ->
+                    ?LOG_DEBUG("Got valid Req:\n~p", [Req2]),
+                    either:right(X#{req => Req2});
+                {false, {error, not_request}} ->
                     either:left(X#{
                         response => response:error_response(
                             invalid_json_request,
                             <<"JSON not a request">>
                         )
                     });
-                Req2 ->
-                    ?LOG_DEBUG("Got valid Req:\n~p", [Req2]),
-                    either:right(X#{req => Req2})
-            catch
-                Err:Reason:StackTrace ->
-                    Msg =
-                        unicode:characters_to_binary(
-                            erl_error:format_exception(Err, Reason, StackTrace)
-                        ),
-                    %% for eqwalizer
-                    true = is_binary(Msg),
+                {false, {error, bad_response}} ->
                     either:left(X#{
-                        response => response:error_response(invalid_json_request, Msg)
+                        response => response:error_response(
+                            invalid_json_request,
+                            unicode:characters_to_binary(
+                                io_lib:format(
+                                    "Got malformed request from server:\n~ts", [Req]
+                                )
+                            )
+                        )
+                    });
+                {false, {error, {invalid_byte, Byte}}} ->
+                    either:left(X#{
+                        response => response:error_response(
+                            invalid_json_request,
+                            unicode:characters_to_binary(
+                                io_lib:format(
+                                    "Got malformed request from client:\n~ts\nReason: invalid_byte: ~ts (~p)",
+                                    [
+                                        Req, <<Byte/integer>>, Byte
+                                    ]
+                                )
+                            )
+                        )
+                    });
+                {false, {error, {unexpected_sequence, Bytes}}} ->
+                    either:left(X#{
+                        response => response:error_response(
+                            invalid_json_request,
+                            unicode:characters_to_binary(
+                                io_lib:format(
+                                    "Got malformed request from client:\n~ts\nReason: unexpected_sequence: ~ts (~p)",
+                                    [Req, Bytes, Bytes]
+                                )
+                            )
+                        )
                     })
             end
         end,
@@ -185,6 +212,7 @@ handle_request(RequestRaw, State) ->
                 response := Response
             } = X,
             %% Even if client sends bad response terminate/1 will handle this
+            %% TODO response:encode?
             Msg = unicode:characters_to_binary(json:encode(Response)),
             socket_handler:send_response(SocketPid, Socket, Msg),
             ?LOG_DEBUG(
@@ -201,6 +229,8 @@ handle_request(RequestRaw, State) ->
         ],
         either:right(#{req => RequestRaw, state => State, response => <<"">>})
     ).
+
+
 
 
 
