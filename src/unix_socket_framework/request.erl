@@ -1,6 +1,6 @@
 -module(request).
 
--export(['decode!'/1]).
+-export([decode/1]).
 
 -export_type([request/0]).
 
@@ -10,13 +10,27 @@
         binary() => json:decode_value()
     }.
 
-%% @doc Uses json, can generate erlang:error()
-'decode!'(Binary) ->
-    maybe
-        Y = #{} ?= json:decode(Binary),
-        {V, Y2} ?= maps:take(<<"request">>, Y),
-        Y2#{request => V}
-    else
-        _ -> {error, not_request}
-    end.
+-spec decode(Binary :: unicode:unicode_binary()) ->
+    either:either(
+        {error, not_request} | {error, json2:decode_reason()},
+        request()
+    ).
+decode(Binary) ->
+    compose:compose(
+        [
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun(X) ->
+                        case maps:take(~"request", X) of
+                            error -> either:left({error, not_request});
+                            {V, X2} -> either:right(X2#{request => V})
+                        end
+                    end
+                )
+            end,
+            fun(Binary2) -> json2:decode(Binary2) end
+        ],
+        Binary
+    ).
 
