@@ -615,14 +615,13 @@ to_csv(Track) ->
     ok | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
     %% TODO в некоторых случаях апи редмайна возвращает ошибки внутри 200-ых кодов
-    %% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
-    XML = unicode:characters_to_binary(to_xml(Track, UserId, oneline)),
+    XML = to_xml(Track, UserId, oneline),
     true = is_binary(XML),
     ?LOG_DEBUG(
         fun(_) ->
             {
                 "Parsed XML:~ts",
-                [unicode:characters_to_binary(to_xml(Track, UserId, indent))]
+                [to_xml(Track, UserId, indent)]
             }
         end,
         []
@@ -666,6 +665,8 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
     end.
 
 %% Format :: oneline | indent
+-spec to_xml(Track :: track(), UserId :: pos_integer(), Format :: oneline | indent) ->
+    unicode:unicode_binary().
 to_xml(Track, UserId, Format) ->
     #track{
         project_id = ProjectID,
@@ -675,35 +676,49 @@ to_xml(Track, UserId, Format) ->
         timestamp_end = TsEnd,
         desc = Desc
     } = Track,
-    lists:flatten(
-        xmerl:export_simple(
-            [
-                {time_entry, [
-                    %% TODO переделать все конвертации строк/бинарей на unicode-модуль
-                    {project_id, [erlang:binary_to_list(ProjectID)]},
-                    {issue_id, [erlang:binary_to_list(Task)]},
-                    {activity_id, [erlang:integer_to_list(ActivityID)]},
-                    {user_id, [erlang:integer_to_list(UserId)]},
-                    {hours, [
-                        erlang:float_to_list(seconds(TsBegin, TsEnd), [{decimals, 1}])
-                    ]},
-                    {comments, [unicode:characters_to_list(Desc)]},
-                    {spent_on, [
-                        erlang:binary_to_list(
-                            begin
-                                [X | _] = string:split(datetime_to_binary(TsBegin), <<" ">>),
-                                true = is_binary(X),
-                                X
-                            end
-                        )
-                    ]}
-                ]}
-            ],
-            case Format of
-                oneline -> xmerl_xml;
-                indent -> xmerl_xml_indent
+    compose:compose(
+        [
+            fun(X) ->
+                X2 = unicode:characters_to_binary(X),
+                true = is_binary(X2),
+                X2
+            end,
+            fun(_) ->
+                xmerl:export_simple(
+                    [
+                        {time_entry, [
+                            %% TODO переделать все конвертации строк/бинарей на unicode-модуль
+                            {project_id, [erlang:binary_to_list(ProjectID)]},
+                            {issue_id, [erlang:binary_to_list(Task)]},
+                            {activity_id, [erlang:integer_to_list(ActivityID)]},
+                            {user_id, [erlang:integer_to_list(UserId)]},
+                            {hours, [
+                                erlang:float_to_list(seconds(TsBegin, TsEnd), [
+                                    {decimals, 1}
+                                ])
+                            ]},
+                            {comments, [unicode:characters_to_list(Desc)]},
+                            {spent_on, [
+                                erlang:binary_to_list(
+                                    begin
+                                        [X | _] = string:split(
+                                            datetime_to_binary(TsBegin), <<" ">>
+                                        ),
+                                        true = is_binary(X),
+                                        X
+                                    end
+                                )
+                            ]}
+                        ]}
+                    ],
+                    case Format of
+                        oneline -> xmerl_xml;
+                        indent -> xmerl_xml_indent
+                    end
+                )
             end
-        )
+        ],
+        []
     ).
 
 -spec seconds(TsBegin :: calendar:datetime(), TsEnd :: calendar:datetime()) ->
