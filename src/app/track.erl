@@ -648,20 +648,22 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
             ]
         )
     of
+        %% TODO вот тут надо матчить код ответа, пока считаем, что если ok, то нам отдали xml-ку
         {ok, Resp} ->
-            ?LOG_DEBUG("Response:~ts", [format_resp(Resp)]),
+            ?LOG_DEBUG(
+                fun(_) ->
+                    {
+                        "Response:~ts",
+                        [format_resp(Resp, fun format_body/1)]
+                    }
+                end,
+                []
+            ),
             ok;
         {error, Reason} ->
             ?LOG_WARNING("Reason:~p", [Reason]),
             {error, Reason}
     end.
-
-%% TODO надо сделать ленивый вызов форматирования, т.к. операция довольно долгая, а получается так, что вне зависимости от статуса лога конвертация будет проходить
-%% TODO надо сделать красивое форматирование xml-ки, функция должна в качестве Body принимать готовую строку
-format_resp({StatusCode, Body}) ->
-    io_lib:format("~p\n~ts", [StatusCode, Body]);
-format_resp({StatusLine, Headers, Body}) ->
-    io_lib:format("~p\n~p\n~ts", [StatusLine, Headers, Body]).
 
 %% Format :: oneline | indent
 to_xml(Track, UserId, Format) ->
@@ -930,6 +932,31 @@ activity(ActivityDesc, Activities) ->
         ActivityID ->
             either:right({ActivityID, ActivityDesc})
     end.
+
+%%%===================================================================
+%%% redmine_api.response
+%%%===================================================================
+
+format_resp({StatusCode, Body}, FormatBody) ->
+    format_resp({StatusCode, FormatBody(Body)});
+format_resp({StatusLine, Headers, Body}, FormatBody) ->
+    format_resp({StatusLine, Headers, FormatBody(Body)}).
+
+format_resp({StatusCode, Body}) ->
+    io_lib:format("~p\n~ts", [StatusCode, Body]);
+format_resp({StatusLine, Headers, Body}) ->
+    io_lib:format("~p\n~p\n~ts", [StatusLine, Headers, Body]).
+
+format_body(Body) ->
+    compose:compose(
+        [
+            fun unicode:characters_to_binary/1,
+            fun(X) ->  xmerl:export_simple([X], xmerl_xml_indent) end,
+            fun(X) ->  {X2, _} = xmerl_scan:string(X), X2 end,
+            fun(X) -> erlang:binary_to_list(X) end
+        ],
+        Body
+    ).
 
 %%%===================================================================
 %%% Tests
