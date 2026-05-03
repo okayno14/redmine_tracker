@@ -89,6 +89,7 @@ import_from_csv(#{csv := Path}) ->
         end,
     process_request(Req, ProcessResp).
 
+%% TODO спеки бля
 process_request(Req, ProcessResp) ->
     compose:compose(
         [
@@ -138,7 +139,18 @@ format_req_2_error({error, {recv, Reason}}) ->
         _ -> io:format("Failed to reccv by reason:~ts", [inet:format_error(Reason)])
     end;
 format_req_2_error({error, {resp, Resp, bad_response}}) ->
-    io:format("Got malformed response from server:\n~ts", [Resp]).
+    io:format("Got malformed response from server:\n~ts", [Resp]);
+format_req_2_error({error, {resp, Resp, {invalid_byte, Byte}}}) ->
+    io:format(
+        "Got malformed response from server:\n~ts\nReason: invalid_byte: ~ts (~p)", [
+            Resp, <<Byte/integer>>, Byte
+        ]
+    );
+format_req_2_error({error, {resp, Resp, {unexpected_sequence, Bytes}}}) ->
+    io:format(
+        "Got malformed response from server:\n~ts\nReason: unexpected_sequence: ~ts (~p)",
+        [Resp, Bytes, Bytes]
+    ).
 
 read_all_io(Device, Acc) ->
     io:setopts(standard_io, [binary]),
@@ -151,12 +163,12 @@ read_all_io(Device, Acc) ->
 send_req(Req) ->
     send_req(<<"/tmp/redmine_tracker.sock">>, Req).
 
+%%--------------------------------------------------------------------
 -type send_req_2_err() ::
     {error, {connect, Reason :: inet:posix()}}
     | {error, {send, closed | {timeout, RestData :: binary() | erlang:iovec()} | inet:posix()}}
     | {error, {recv, closed | inet:posix()}}
-    | {error, {resp, Resp :: unicode:unicode_binary(), bad_response}}.
-
+    | {error, {resp, Resp :: unicode:unicode_binary(), response:decode_reason()}}.
 -spec send_req(Path :: unicode:unicode_binary(), Req :: unicode:unicode_binary()) ->
     either:either(
         send_req_2_err(),
@@ -172,8 +184,8 @@ send_req(Path, Req) ->
                     fun(#{resp := Resp, socket := Socket}) ->
                         gen_tcp:close(Socket),
                         either:cata(
-                            response:'decode!'(Resp),
-                            fun({error, bad_response}) -> {error, {resp, Resp, bad_response}} end,
+                            response:decode(Resp),
+                            fun({error, Reason}) -> {error, {resp, Resp, Reason}} end,
                             fun(X2) -> X2 end
                         )
                     end
@@ -215,4 +227,5 @@ send_req(Path, Req) ->
         ],
         either:right(#{path => Path, req => Req})
     ).
+%%--------------------------------------------------------------------
 

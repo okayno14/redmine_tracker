@@ -3,7 +3,7 @@
 -export([
     ok_response/1,
     error_response/2,
-    'decode!'/1,
+    decode/1,
     format/1
 ]).
 
@@ -11,7 +11,8 @@
     response/0,
     ok_response/0,
     error_response/0,
-    error_response/1
+    error_response/1,
+    decode_reason/0
 ]).
 
 -type response() :: ok_response() | error_response().
@@ -54,39 +55,76 @@ error_response(Reason, Msg) ->
         msg => Msg
     }.
 
+%%--------------------------------------------------------------------
+-type decode_reason() ::
+    bad_response
+    | {invalid_byte, Byte :: byte()}
+    | {unexpected_sequence, Bytes :: binary()}.
+
 %% TODO завернуть json в try-catch
--spec 'decode!'(Binary :: unicode:unicode_binary()) ->
+-spec decode(Binary :: unicode:unicode_binary()) ->
     either:either(
-        {error, bad_response},
+        {error, decode_reason()},
         error_response() | ok_response()
     ).
-'decode!'(Binary) ->
-    case json:decode(Binary) of
-        #{
-            <<"type">> := <<"error">>,
-            <<"reason">> := Reason,
-            <<"msg">> := Msg
-        } when is_binary(Reason), is_binary(Msg) ->
-            either:right(
-                #{
-                    type => error,
-                    reason => erlang:binary_to_atom(Reason),
-                    msg => Msg
-                }
-            );
-        #{
-            <<"type">> := <<"ok">>,
-            <<"data">> := Data
-        } ->
-            either:right(
-                #{
-                    type => ok,
-                    data => Data
-                }
-            );
-        _ ->
-            either:left({error, bad_response})
-    end.
+decode(Binary) ->
+    compose:compose(
+        [
+            fun(Either) ->
+                either:flatmap(
+                    Either,
+                    fun
+                        (
+                            #{
+                                <<"type">> := <<"error">>,
+                                <<"reason">> := Reason,
+                                <<"msg">> := Msg
+                            }
+                        ) when is_binary(Reason), is_binary(Msg) ->
+                            either:right(
+                                #{
+                                    type => error,
+                                    reason => erlang:binary_to_atom(Reason),
+                                    msg => Msg
+                                }
+                            );
+                        (
+                            #{
+                                <<"type">> := <<"ok">>,
+                                <<"data">> := Data
+                            }
+                        ) ->
+                            either:right(
+                                #{
+                                    type => ok,
+                                    data => Data
+                                }
+                            );
+                        (_) ->
+                            either:left({error, bad_response})
+                    end
+                )
+            end,
+            fun(Either) ->
+                % in documentation said, that we must expect this kind of errors,
+                % for type safety we must check returned error
+                either:leftmap(
+                    Either,
+                    fun
+                        ({error, unexpected_end, _StackTrace}) ->
+                            {error, unexpected_end};
+                        ({error, {invalid_byte, Byte}, _StackTrace}) ->
+                            {error, {invalid_byte, Byte}};
+                        ({error, {unexpected_sequence, _Bytes}, _StackTrace}) ->
+                            {error, {unexpected_sequence, _Bytes}}
+                    end
+                )
+            end,
+            fun(X) -> either:from_try(fun() -> json:decode(X) end) end
+        ],
+        Binary
+    ).
+%%--------------------------------------------------------------------
 
 -spec format(response()) ->
     unicode:unicode_binary().
