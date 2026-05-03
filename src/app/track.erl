@@ -616,9 +616,17 @@ to_csv(Track) ->
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
     %% TODO в некоторых случаях апи редмайна возвращает ошибки внутри 200-ых кодов
     %% TODO возможно лучше перетащить внутрь to_xml, т.к. я больше бинарями пользуюсь
-    XML = unicode:characters_to_binary(to_xml(Track, UserId)),
-    ?LOG_DEBUG("Parsed XML:~ts", [XML]),
+    XML = unicode:characters_to_binary(to_xml(Track, UserId, oneline)),
     true = is_binary(XML),
+    ?LOG_DEBUG(
+        fun(_) ->
+            {
+                "Parsed XML:~ts",
+                [unicode:characters_to_binary(to_xml(Track, UserId, indent))]
+            }
+        end,
+        []
+    ),
     case
         httpc:request(
             post,
@@ -655,7 +663,8 @@ format_resp({StatusCode, Body}) ->
 format_resp({StatusLine, Headers, Body}) ->
     io_lib:format("~p\n~p\n~ts", [StatusLine, Headers, Body]).
 
-to_xml(Track, UserId) ->
+%% Format :: oneline | indent
+to_xml(Track, UserId, Format) ->
     #track{
         project_id = ProjectID,
         activity = {ActivityID, _Activity},
@@ -688,7 +697,10 @@ to_xml(Track, UserId) ->
                     ]}
                 ]}
             ],
-            xmerl_xml
+            case Format of
+                oneline -> xmerl_xml;
+                indent -> xmerl_xml_indent
+            end
         )
     ).
 
