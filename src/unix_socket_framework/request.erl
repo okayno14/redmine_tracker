@@ -1,6 +1,9 @@
 -module(request).
 
--export([decode/1]).
+-export([
+    encode/2,
+    decode/1
+]).
 
 -export_type([request/0]).
 
@@ -9,6 +12,13 @@
         request := unicode:unicode_binary(),
         binary() => json:decode_value()
     }.
+
+-spec encode(Binary :: request(), oneline | indent) ->
+    JSON :: unicode:unicode_binary().
+encode(Request = #{request := _}, oneline) ->
+    json2:encode(Request, oneline);
+encode(Request = #{request := _}, indent) ->
+    json2:encode(Request, indent).
 
 -spec decode(Binary :: unicode:unicode_binary()) ->
     either:either(
