@@ -125,9 +125,7 @@ terminate({Reason, StackTrace}, State) ->
     socket_handler:send_response(
         SocketPid,
         Socket,
-        unicode:characters_to_binary(
-            json:encode(response:error_response(session_crashed, Msg))
-        )
+        response:encode(response:error_response(session_crashed, Msg), oneline)
     ),
     ?LOG_DEBUG("Reason sent to ~p ~p", [SocketPid, Socket]),
     ok;
@@ -212,9 +210,9 @@ handle_request(RequestRaw, State) ->
                 response := Response
             } = X,
             %% Even if client sends bad response terminate/1 will handle this
-            %% TODO response:encode?
-            Msg = unicode:characters_to_binary(json:encode(Response)),
-            socket_handler:send_response(SocketPid, Socket, Msg),
+            socket_handler:send_response(
+                SocketPid, Socket, response:encode(Response, oneline)
+            ),
             ?LOG_DEBUG(
                 "Sent to Socket:~p Response:\n~ts",
                 [Socket, response:format(Response)]
@@ -229,8 +227,3 @@ handle_request(RequestRaw, State) ->
         ],
         either:right(#{req => RequestRaw, state => State, response => <<"">>})
     ).
-
-
-
-
-
