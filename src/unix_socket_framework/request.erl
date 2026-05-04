@@ -2,10 +2,13 @@
 
 -export([
     encode/2,
-    decode/1
+    decode/1,
+    format/1
 ]).
 
 -export_type([request/0]).
+
+-eqwalizer({nowarn_function, format/1}).
 
 -type request() ::
     #{
@@ -42,5 +45,18 @@ decode(Binary) ->
             fun(Binary2) -> json2:decode(Binary2) end
         ],
         Binary
+    ).
+
+-spec format(Request :: request()) ->
+    unicode:unicode_binary().
+format(Request = #{request := _}) ->
+    unicode:characters_to_binary(
+        lists:flatmap(
+            fun
+                ({K, V}) when is_binary(V) -> ["\n---\n", io_lib:format("~p:\n~ts", [K, V])];
+                ({K, V}) -> ["\n---\n", io_lib:format("~p:\n~p", [K, V])]
+            end,
+            maps:to_list(Request)
+        ) ++ ["\n---"]
     ).
 

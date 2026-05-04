@@ -148,7 +148,12 @@ handle_request(RequestRaw, State) ->
             Either = request:decode(Req),
             case {either:is_right(Either), either:extract(Either)} of
                 {true, Req2} ->
-                    ?LOG_DEBUG("Got valid Req:\n~p", [Req2]),
+                    ?LOG_DEBUG(
+                        fun(_) ->
+                            {"Got valid Req:\n~ts", [request:format(Req2)]}
+                        end,
+                        []
+                    ),
                     either:right(X#{req => Req2});
                 {false, {error, not_request}} ->
                     either:left(X#{
