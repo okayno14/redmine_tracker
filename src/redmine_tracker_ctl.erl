@@ -38,19 +38,22 @@ export_to_csv(#{}) ->
             (_) ->
                 nomatch
         end,
-    %% TODO можем откинуться из-за исключения
     Req =
         fun() ->
-            either:right(json:encode(#{request => <<"export_to_csv">>}))
+            either:right(request:encode(#{request => <<"export_to_csv">>}, oneline))
         end,
     process_request(Req, ProcessResp).
 
 import_from_csv(#{csv := <<"stdin">>}) ->
     Req =
         fun() ->
-            %% TODO можем откинуться из-за исключения
             CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
-            either:right(json:encode(#{request => <<"import_from_csv">>, csv => CSV}))
+            either:right(
+                request:encode(
+                    #{request => <<"import_from_csv">>, csv => CSV},
+                    oneline
+                )
+            )
         end,
     ProcessResp =
         fun
@@ -67,9 +70,10 @@ import_from_csv(#{csv := Path}) ->
                 {ok, Binary} ->
                     CSV = unicode:characters_to_binary(Binary),
                     either:right(
-                        %% TODO можем откинуться из-за исключения
-                        %% TODO заменить на либу request
-                        json:encode(#{request => <<"import_from_csv">>, csv => CSV})
+                        request:encode(
+                            #{request => <<"import_from_csv">>, csv => CSV},
+                            oneline
+                        )
                     );
                 {error, Reason} ->
                     either:left(
