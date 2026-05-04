@@ -3,6 +3,7 @@
 -export([
     ok_response/1,
     error_response/2,
+    encode/2,
     decode/1,
     format/1
 ]).
@@ -53,6 +54,15 @@ error_response(Reason, Msg) ->
         reason => Reason,
         msg => Msg
     }.
+
+-spec encode(Response :: response(), oneline | indent) ->
+    JSON :: unicode:unicode_binary().
+encode(Response, oneline) ->
+    true = is_response(Response),
+    json2:encode(Response, oneline);
+encode(Response, indent) ->
+    true = is_response(Response),
+    json2:encode(Response, indent).
 
 %%--------------------------------------------------------------------
 -spec decode(Binary :: unicode:unicode_binary()) ->
@@ -131,3 +141,11 @@ format(#{
         ),
     true = is_binary(X),
     X.
+
+is_response(#{type := ok, data := _}) ->
+    true;
+is_response(#{type := error, reason := Reason, msg := _}) when is_atom(Reason) ->
+    true;
+is_response(_) ->
+    false.
+
