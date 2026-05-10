@@ -46,7 +46,7 @@ route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
 route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),
     {
-        fun(_) -> ok end,
+        fun() -> ok end,
         fun(_) -> response:error_response(no_route, <<"Unknown request">>) end
     }.
 
