@@ -50,6 +50,10 @@ cli() ->
                     }
                 ],
                 handler => fun begin_track/1
+            },
+            "end_track_last" => #{
+                arguments => [],
+                handler => fun end_track_last/1
             }
         }
     }.
@@ -120,6 +124,11 @@ import_from_csv(#{csv := Path}) ->
 
 begin_track(Args = #{}) ->
     Req = fun() -> either:right(request:encode(Args#{request => ~"begin_track"}, oneline)) end,
+    ProcessResp = fun(_) -> nomatch end,
+    process_request(Req, ProcessResp).
+
+end_track_last(Args = #{}) ->
+    Req = fun() -> either:right(request:encode(#{request => ~"end_track_last"}, oneline)) end,
     ProcessResp = fun(_) -> nomatch end,
     process_request(Req, ProcessResp).
 

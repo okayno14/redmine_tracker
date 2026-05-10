@@ -120,6 +120,11 @@ begin_track(ProjectID, ActivityDesc, Task, Desc) ->
     end,
     db:transaction(F).
 
+-spec end_track_last() ->
+    db:transaction_ret(
+        {error, Msg :: unicode:unicode_binary()},
+        ok
+    ).
 end_track_last() ->
     F = fun() ->
         compose:compose(

@@ -109,6 +109,18 @@ route(Req = #{request := ~"begin_track"}) ->
             end
         end
     };
+route(Req = #{request := ~"end_track_last"}) ->
+    {
+        fun() -> track_composed:end_track_last() end,
+        fun(Either) ->
+            case {either:is_right(Either), either:extract(Either)} of
+                {true, ok} ->
+                    response:ok_response(ok);
+                {false, {throw, {error, Msg}}} ->
+                    response:error_response(end_track_last, Msg)
+            end
+        end
+    };
 route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),
     {
