@@ -43,6 +43,72 @@ route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
             end
         end
     };
+route(Req = #{request := ~"begin_track"}) ->
+    {
+        fun() ->
+            #{
+                ~"project_id" := ProjectID,
+                ~"activity_desc" := ActivityDesc,
+                ~"task" := Task,
+                ~"desc" := Desc
+            } = Req,
+            track_composed:begin_track(ProjectID, ActivityDesc, Task, Desc)
+        end,
+        fun(Either) ->
+            FormatValidateErr =
+                fun(Err) ->
+                    case Err of
+                        {error, {project_id, ProjectID, Msg}} ->
+                            unicode:characters_to_binary([
+                                ~"Validation.",
+                                ~"ProjectID: ", io_lib:format("~p", [ProjectID]), ~". ",
+                                Msg
+                            ]);
+                        {error, {activity, ActivityID, Msg}} ->
+                            unicode:characters_to_binary([
+                                ~"Validation.",
+                                ~"ActivityID: ", io_lib:format("~p", [ActivityID]), ~". ",
+                                Msg
+                            ]);
+                        {error, {task, Task, Msg}, _AnotherError} ->
+                            unicode:characters_to_binary([
+                                ~"Validation.",
+                                ~"Task: ", io_lib:format("~p", [Task]), ~". ",
+                                Msg
+                            ]);
+                        {error, {task, Task, Msg}} ->
+                            unicode:characters_to_binary([
+                                ~"Validation.",
+                                ~"Task: ", io_lib:format("~p", [Task]), ~". ",
+                                Msg
+                            ]);
+                        {error, {desc, Desc, Msg}} ->
+                            unicode:characters_to_binary([
+                                ~"Validation.",
+                                ~"Desc: ", io_lib:format("~p", [Desc]), ~". ",
+                                Msg
+                            ])
+                        end
+                end,
+
+            case {either:is_right(Either), either:extract(Either)} of
+                {true, ok} ->
+                    response:ok_response(ok);
+                {false, {throw, {error, Msg}}} when is_binary(Msg) ->
+                    response:error_response(begin_track, Msg);
+                {false, {throw, ErrorList}} when is_list(ErrorList) ->
+                    response:error_response(
+                        begin_track,
+                        unicode:characters_to_binary(
+                            lists:join(
+                                ~"\n",
+                                lists:map(FormatValidateErr, ErrorList)
+                            )
+                        )
+                    )
+            end
+        end
+    };
 route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),
     {

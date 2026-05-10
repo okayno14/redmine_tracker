@@ -126,6 +126,7 @@ new(Id, ProjectID, Activity = {_, _}, Task, TsBegin, TsEnd, Desc, State) ->
 -spec validate(Track :: track()) ->
     validate_err().
 %%--------------------------------------------------------------------
+%% TODO вывести validate_err из error в reason, сделать функцию формата
 validate(Track = #track{}) ->
     L = ?R2L(Track, track),
     ?LOG_DEBUG("~p", [L]),

@@ -25,6 +25,31 @@ cli() ->
                     }
                 ],
                 handler => fun import_from_csv/1
+            },
+            "begin_track" => #{
+                arguments => [
+                    #{
+                        name => project_id,
+                        type => binary,
+                        help => ~"ProjectID in redmine"
+                    },
+                    #{
+                        name => activity_desc,
+                        type => binary,
+                        help => ~"Track activity"
+                    },
+                    #{
+                        name => task,
+                        type => binary,
+                        help => ~"Task ID (only number without #)"
+                    },
+                    #{
+                        name => desc,
+                        type => binary,
+                        help => ~"Track description"
+                    }
+                ],
+                handler => fun begin_track/1
             }
         }
     }.
@@ -91,6 +116,11 @@ import_from_csv(#{csv := Path}) ->
             (_) ->
                 nomatch
         end,
+    process_request(Req, ProcessResp).
+
+begin_track(Args = #{}) ->
+    Req = fun() -> either:right(request:encode(Args#{request => ~"begin_track"}, oneline)) end,
+    ProcessResp = fun(_) -> nomatch end,
     process_request(Req, ProcessResp).
 
 %% TODO спеки бля

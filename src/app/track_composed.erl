@@ -23,10 +23,8 @@
     Task :: unicode:unicode_binary(),
     Desc :: unicode:unicode_binary()
 ) ->
-    either:either(
-        {throw, {error, Msg :: unicode:unicode_binary()}}
-        | {throw, track:validate_err()}
-        | {Reason :: term(), erlang:stacktrace()},
+    db:transaction_ret(
+        {error, Msg :: unicode:unicode_binary()} | track:validate_err(),
         ok
     ).
 begin_track(ProjectID, ActivityDesc, Task, Desc) ->
@@ -66,9 +64,30 @@ begin_track(ProjectID, ActivityDesc, Task, Desc) ->
                 fun(X) ->
                     either:flatmap(
                         X,
+                        fun(Activities) ->
+                            either:leftmap(
+                                track:activity(ActivityDesc, Activities),
+                                fun(_) ->
+                                    {
+                                        error,
+                                        unicode:characters_to_binary(
+                                            [
+                                                ~"No such Activity:", ActivityDesc,
+                                                ~" in Activities-db"
+                                            ]
+                                        )
+                                    }
+                                end
+                            )
+                        end
+                    )
+                end,
+                fun(X) ->
+                    either:flatmap(
+                        X,
                         fun
                             (Activities) when is_binary(ActivityDesc) ->
-                                track:activity(ActivityDesc, Activities);
+                                X;
                             (_) ->
                                 either:left({error, <<"ActivityDesc must be a binary">>})
                         end
