@@ -7,7 +7,10 @@
    [kernel,
     stdlib,
     ssl,
-    inets
+    inets,
+    erl_utils,
+    mnesia,
+    xmerl
    ]},
   {env,[
     {socket, <<"/tmp/redmine_tracker.sock">>},
