@@ -17,9 +17,13 @@
 ]).
 
 start() ->
-    mnesia:create_schema([erlang:node()], []),
+    Node = erlang:node(),
+    case mnesia:create_schema([Node], []) of
+        ok -> ok;
+        {error, Reason = {_, {already_exists, _}}} -> ok
+    end,
     mnesia:start(),
-    ok = track:create_table().
+    ok = track:create_table(Node).
 
 init() ->
     true = either:is_right(transaction(fun track:init_tables/0)),

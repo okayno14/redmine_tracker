@@ -36,7 +36,7 @@
     activities/0,
     push_to_redmine/4,
     %% db-операции
-    create_table/0,
+    create_table/1,
     init_tables/0,
     wait_for_tables/0,
     last_id/0,
@@ -873,11 +873,11 @@ binary_to_datetime_2(DateTimeBin) ->
 %%% track.db
 %%%===================================================================
 
-create_table() ->
+create_table(Node) ->
     case
         mnesia:create_table(track_id, [
             {attributes, record_info(fields, track_id)},
-            {disc_copies, [erlang:node()]}
+            {disc_copies, [Node]}
         ])
     of
         {atomic, ok} -> ok;
@@ -886,7 +886,7 @@ create_table() ->
     case
         mnesia:create_table(track, [
             {attributes, record_info(fields, track)},
-            {disc_copies, [erlang:node()]}
+            {disc_copies, [Node]}
         ])
     of
         {atomic, ok} -> ok;
