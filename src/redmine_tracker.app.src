@@ -9,9 +9,11 @@
     ssl,
     inets,
     erl_utils,
-    mnesia,
     xmerl
    ]},
+  {included_applications, [
+    mnesia
+  ]},
   {env,[
     {socket, <<"/tmp/redmine_tracker.sock">>},
     {api_key, <<"1234">>},
