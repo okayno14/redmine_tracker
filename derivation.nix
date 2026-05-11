@@ -5,7 +5,6 @@ let
 in
   with pkgs_otp27;
     let
-      a = "faa";
       # TODO use common map and inherit keys
       # deps = fetchRebar3Deps {
       #   name = "redmine_tracker";
@@ -14,37 +13,41 @@ in
       #   sha256 = "0000000000000000000000000000000000000000000000000000";
       # };
     in
-      callPackage ./fetch-rebar3-deps.nix {} {
+      beam27Packages.rebar3Relx {
         name = "redmine_tracker";
+        pname = "redmine_tracker";
         version = "0.0.1";
+        profile = "prod";
+        releaseType = "release";
         src = ./.;
-        sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
-        nativeBuildInputs = [ git ];
+        checkouts =
+          pkgs_otp27.lib.traceVal
+            callPackage ./fetch-rebar3-deps.nix {} {
+              # TODO убрать копипасту
+              name = "redmine_tracker";
+              version = "0.0.1";
+              src = ./.;
+              sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
+              nativeBuildInputs = [ git ];
+            };
+        # nativeBuildInputs = [
+        #   beam27Packages.erlang
+        #   beam27Packages.rebar3
+        # ];
+        # buildInputs = [
+        #   beam27Packages.erlang
+        # ];
+        # buildPhase = ''
+        #   # echo $USER
+        #   # echo $PWD
+        #   # export HOME=$TMPDIR
+        #   # export DEBUG=1
+        #   # rebar3 get-deps
+        #   # rebar3 compile
+        #   rebar3 release
+        # '';
+        # deps = beam27Packages.fetchRebar3Deps {
+        #   rebarLock = ./rebar.lock;
+        # };
       }
-      # beam27Packages.rebar3Relx {
-      #   pname = "redmine_tracker";
-      #   version = "0.0.1";
-      #   profile = "prod";
-      #   releaseType = "release";
-      #   src = ./.;
-      #   # nativeBuildInputs = [
-      #   #   beam27Packages.erlang
-      #   #   beam27Packages.rebar3
-      #   # ];
-      #   # buildInputs = [
-      #   #   beam27Packages.erlang
-      #   # ];
-      #   # buildPhase = ''
-      #   #   # echo $USER
-      #   #   # echo $PWD
-      #   #   # export HOME=$TMPDIR
-      #   #   # export DEBUG=1
-      #   #   # rebar3 get-deps
-      #   #   # rebar3 compile
-      #   #   rebar3 release
-      #   # '';
-      #   # deps = beam27Packages.fetchRebar3Deps {
-      #   #   rebarLock = ./rebar.lock;
-      #   # };
-      # }
 
