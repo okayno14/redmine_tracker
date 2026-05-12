@@ -14,11 +14,12 @@ in
         profile = "prod";
         releaseType = "release";
         checkouts =
-          callPackage ./fetch-rebar3-deps.nix {} {
+          (beam27Packages.fetchRebar3Deps {
             inherit name version src;
             sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
+          }).overrideAttrs (old: {
             nativeBuildInputs = [ git ];
-          };
+          });
       }
     ).overrideAttrs (old: {
       postInstall = ''
