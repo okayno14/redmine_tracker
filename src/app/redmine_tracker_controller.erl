@@ -37,7 +37,7 @@ route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
                         )
                     );
                 {false, {throw, {error, bad_csv}}} ->
-                    reponse:error_response(bad_csv, <<"unknown csv-error">>);
+                    response:error_response(bad_csv, <<"unknown csv-error">>);
                 _V ->
                     nomatch
             end
