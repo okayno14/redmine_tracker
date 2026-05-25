@@ -1,0 +1,9 @@
+#! /bin/bash
+
+if [ -f $CONFIG ]; then
+  RELX_CONFIG_PATH=~/.config/redmine_tracker/sys.config
+  export RELX_CONFIG_PATH
+fi
+
+./redmine_tracker $*
+
