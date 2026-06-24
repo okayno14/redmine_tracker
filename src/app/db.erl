@@ -32,7 +32,7 @@ start() ->
     Node = erlang:node(),
     case mnesia:create_schema([Node], []) of
         ok -> ok;
-        {error, Reason = {_, {already_exists, _}}} -> ok
+        {error, _Reason = {_, {already_exists, _}}} -> ok
     end,
     mnesia:start(),
     ok = track:create_table(Node).
