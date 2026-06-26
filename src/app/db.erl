@@ -21,9 +21,7 @@ set_path(DbPath) ->
     compose:compose(
         [
             fun(DbPath2) -> application:set_env(mnesia, dir, DbPath2) end,
-            fun(DbPath2) -> ok = filelib:ensure_dir(DbPath2), DbPath2 end,
-            fun(DbPath2) -> characters_to_list(DbPath2) end,
-            fun(DbPath2) -> {ok, DbPath3} = expand_path(DbPath2), DbPath3 end
+            fun(DbPath2) -> ok = filelib:ensure_dir(DbPath2), DbPath2 end
         ],
         DbPath
     ).
@@ -91,6 +89,7 @@ transaction(Fun) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
+%% TODO добавить в доку: если функция в транзакции возвращает either, то добавив either_throw, сможем получать такой же either, который вернулся внутри транзакции
 %% @doc
 %% <pre>
 %% For aborting db transaction.
@@ -109,38 +108,4 @@ either_throw(Either) ->
     ).
 %%--------------------------------------------------------------------
 
--spec expand_path(Path :: unicode:unicode_binary()) ->
-    {ok, unicode:unicode_binary()} | error.
-expand_path(Path) ->
-    [Root | T] = string:split(Path, <<"/">>, leading),
-    case expand_var(Root) of
-        {ok, Root2} ->
-            {ok, characters_to_binary([Root2, <<"/">>, T])};
-        error ->
-            error
-    end.
-
--spec expand_var(unicode:unicode_binary()) ->
-    {ok, unicode:unicode_binary()} | error.
-expand_var(<<"~">>) ->
-    expand_var(<<"$HOME">>);
-expand_var(<<"$", Var/binary>>) ->
-    compose:if_else(
-        fun(Val) -> erlang:is_list(Val) end,
-        fun(Val) -> {ok, characters_to_binary(Val)} end,
-        fun(_Val) -> error end,
-        os:getenv(characters_to_list(Var))
-    );
-expand_var(X) ->
-    {ok, X}.
-
-characters_to_list(Chars) ->
-    Ret = unicode:characters_to_list(Chars),
-    true = erlang:is_list(Ret),
-    Ret.
-
-characters_to_binary(Chars) ->
-    Ret = unicode:characters_to_binary(Chars),
-    true = erlang:is_binary(Ret),
-    Ret.
 

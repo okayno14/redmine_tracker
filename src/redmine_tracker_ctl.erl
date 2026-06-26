@@ -202,9 +202,9 @@ read_all_io(Device, Acc) ->
         String -> read_all_io(Device, [String | Acc])
     end.
 
-%% TODO попробовать вытащить из конфиги
 send_req(Req) ->
-    send_req(<<"/tmp/redmine_tracker.sock">>, Req).
+    {ok, Path} = path:expand(<<"$XDG_RUNTIME_DIR/redmine_tracker.sock">>),
+    send_req(Path, Req).
 
 %%--------------------------------------------------------------------
 -type send_req_2_err() ::

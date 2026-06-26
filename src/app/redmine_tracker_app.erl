@@ -12,9 +12,6 @@
     stop/1
 ]).
 
-%% TODO путь для схемы задаётся через параметр dir.
-%% Пока что дефолт, но при установке пакета надо будет закрепить дефолтные пути в системе
-%% ~/.local/state/redmine_tracker
 start(_StartType, _StartArgs) ->
     logger:set_module_level(track, debug),
     %% When socket_address can't be expanded, we must fail without mnesia starting
@@ -33,6 +30,20 @@ set_path() ->
     compose:compose(
         [
             fun(DbPath) -> db:set_path(DbPath) end,
+            fun(DbPath) -> characters:to_list(DbPath) end,
+            fun(DbPath) ->
+                %% if {nomatch, error} => user configured environment variable, that doesn't exist
+                case
+                    {
+                        string:find(DbPath, <<"$XDG_STATE_HOME">>, leading),
+                        path:expand(DbPath)
+                    }
+                of
+                    %% XDG_STATE_HOME can be undefined
+                    {Str, error} when is_binary(Str) -> <<"~/.local/state/redmine_tracker">>;
+                    {_, {ok, DbPath2}} -> DbPath2
+                end
+            end,
             fun(_) ->
                 {ok, DbPath} = application:get_env(redmine_tracker, db_path),
                 true = is_binary(DbPath),
