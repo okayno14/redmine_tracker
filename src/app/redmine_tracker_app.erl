@@ -17,11 +17,14 @@
 %% ~/.local/state/redmine_tracker
 start(_StartType, _StartArgs) ->
     logger:set_module_level(track, debug),
+    %% When socket_address can't be expanded, we must fail without mnesia starting
+    %% TODO переименовать в socket_address
+    Socket = get_socket(),
     ok = set_path(),
     ok = db:start(),
     ok = db:ensure_all_ready(),
     ok = db:init(),
-    redmine_tracker_sup:start_link().
+    redmine_tracker_sup:start_link(Socket).
 
 stop(_State) ->
     ok.
@@ -38,4 +41,10 @@ set_path() ->
         ],
         ok
     ).
+
+get_socket() ->
+    {ok, Socket} = application:get_env(redmine_tracker, socket),
+    true = is_binary(Socket),
+    {ok, Socket2} = path:expand(Socket),
+    Socket2.
 

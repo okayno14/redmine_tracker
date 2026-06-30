@@ -3,7 +3,7 @@
 
 %% API
 -export([
-    start_link/0
+    start_link/1
 ]).
 
 %% Callbacks
@@ -11,16 +11,15 @@
 
 -define(SERVER, ?MODULE).
 
-start_link() ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+start_link(Socket) ->
+    supervisor:start_link({local, ?SERVER}, ?MODULE, [Socket]).
 
-init([]) ->
+init([Socket]) ->
     SupFlags = #{
         strategy => one_for_one,
         intensity => 1,
         period => 5
     },
-    {ok, Socket} = application:get_env(socket),
     case file:delete(Socket) of
         ok -> ok;
         {error, enoent} -> ok
