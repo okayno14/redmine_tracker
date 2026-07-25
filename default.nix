@@ -6,6 +6,9 @@ let
     pname = name;
     version = "0.0.1";
     src = ./.;
+    # rebar3 = pkgs_otp27.beam27Packages.rebar3.overrideAttrs(
+    #   old: {nativeBuildInputs = [pkgs_otp27.git];}
+    # );
 in
   with pkgs_otp27;
     (
@@ -19,18 +22,19 @@ in
 
       beam27Packages.rebar3Relx {
         inherit pname version src;
+        nativeBuildinputs = [ git ];
         profile = "prod";
         releaseType = "release";
         checkouts =
-          (beam27Packages.fetchRebar3Deps {
+          beam27Packages.fetchRebar3Deps {
             inherit name version src;
             # sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
             # sha256 = "sha256-rF2dFDk5xY5+sGetaF0PK5/aK1cyZ9JBDGimxOQz3JE=";
             sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
-          });
+          };
+          # ();
       }
     ).overrideAttrs (old: {
-      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ git ];
       postInstall = ''
         echo "Deps fetched to $checkouts"
       '';
