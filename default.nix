@@ -27,11 +27,10 @@ in
             # sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
             # sha256 = "sha256-rF2dFDk5xY5+sGetaF0PK5/aK1cyZ9JBDGimxOQz3JE=";
             sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
-          }).overrideAttrs (old: {
-            nativeBuildInputs = [ git ];
           });
       }
     ).overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ git ];
       postInstall = ''
         echo "Deps fetched to $checkouts"
       '';
