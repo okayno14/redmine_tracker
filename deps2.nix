@@ -47,5 +47,5 @@ stdenv.mkDerivation {
   outputHashMode = "recursive";
   outputHash = sha256;
   dontUnpack = true;
-  # dontPatch = true;
+  # dontFixup = true;
 }
