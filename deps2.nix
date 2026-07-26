@@ -22,9 +22,6 @@ stdenv.mkDerivation {
   nativeBuildInputs = [ rebar3 git cacert ];
 
   buildPhase = ''
-    ls -alF .
-    echo "test"
-    ls -alF "$src"
     cp "$src/rebar.config" .
     cp "$src/rebar.lock" .
     rm -rf .git
@@ -32,23 +29,17 @@ stdenv.mkDerivation {
   '';
 
   installPhase = ''
-    ls -alF .
-    ls -alF _build/default/lib
-    mkdir -p $out
+    mkdir -p "$out/_checkouts"
 
     rm -rf _build/default/lib/erl_utils/.git
-    cp -r _build/default/lib/erl_utils "$out/"
-    ls -alF "$out/erl_utils"
+    cp -r _build/default/lib/erl_utils "$out/_checkouts"
 
     rm -rf _build/default/lib/meck/.git*
     rm _build/default/lib/meck/.scripts/cut.sh
-    cp -r _build/default/lib/meck "$out/"
-    ls -alF "$out/meck"
+    cp -r _build/default/lib/meck "$out/_checkouts"
 
     # rm -rf _build/default/lib/*/.git
     # cp -r _build/default/lib/* "$out/"
-
-    ls -alF "$out/"
   '';
 
   # Fixed-Output Derivation settings
