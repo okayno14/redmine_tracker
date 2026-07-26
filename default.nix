@@ -43,7 +43,7 @@ in
           #   echo "Deps fetched to $out"
           # '';
       # })
-      (beam27Packages.rebar3Relx {
+      beam27Packages.rebar3Relx {
         inherit pname version src;
         profile = "prod";
         releaseType = "release";
@@ -59,15 +59,5 @@ in
               inherit name version;
               sha256 = "sha256-WRVHCVcVdA/qpTNHbSehNsC7UKGBI/DYtSEOWa3htkQ=";
           });
-      }).overrideAttrs {
-          # Added, cause rebar3 can't make a dir inside fetched directory
-          # TODO no ${profile} reuse
-          preBuild = ''
-            ls -alF .
-            mkdir -p _build/default/bin
-            ls -alF _build/default/bin
-            mkdir -p _build/prod/rel/redmine_tracker/bin
-            ls -alF _build/prod/rel/redmine_tracker/
-          '';
-        }
+      }
     )
