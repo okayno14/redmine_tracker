@@ -7,6 +7,7 @@ let
     version = "0.0.1";
     src = ./.;
 
+    # Refactor: looks bad
     deps = import ./deps.nix {
       lib = pkgs_otp27.lib;
       stdenv = pkgs_otp27.stdenv;
@@ -33,7 +34,14 @@ in
         profile = "prod";
         releaseType = "release";
         checkouts = deps {
-            inherit name version src;
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [
+                ./rebar.lock
+                ./rebar.config
+              ];
+            };
+            inherit name version;
             sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
         };
         # checkouts =
