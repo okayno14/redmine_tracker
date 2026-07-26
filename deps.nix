@@ -14,6 +14,7 @@
 }:
 
 stdenv.mkDerivation {
+  allowedRequisites = [];
   nativeBuildInputs=[git];
   pname = "rebar-deps-${name}";
   inherit version;
@@ -37,6 +38,7 @@ stdenv.mkDerivation {
        cp -R "$i" "$out/_checkouts"
     done
     runHook postInstall
+    echo my_test
   '';
 
   outputHashAlgo = "sha256";

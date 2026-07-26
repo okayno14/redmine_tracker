@@ -33,7 +33,7 @@ in
         inherit pname version src;
         profile = "prod";
         releaseType = "release";
-        checkouts = deps {
+        checkouts = (deps {
             src = lib.fileset.toSource {
               root = ./.;
               fileset = lib.fileset.unions [
@@ -43,7 +43,12 @@ in
             };
             inherit name version;
             sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
-        };
+        }).overrideAttrs (old: {
+            preInstall = "before:";
+            postInstall = ''
+              echo "Deps fetched to $checkouts"
+            '';
+        });
         # checkouts =
         #   beam27Packages.fetchRebar3Deps {
         #     inherit name version src;
@@ -53,8 +58,4 @@ in
         #   };
           # ();
       }
-    ).overrideAttrs (old: {
-      postInstall = ''
-        echo "Deps fetched to $checkouts"
-      '';
-    })
+    )
