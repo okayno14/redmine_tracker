@@ -9,14 +9,6 @@ let
 in
   with pkgs_otp27;
     (
-
-      # (beam27Packages.fetchRebar3Deps {
-      #   inherit name version src;
-      #   sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
-      # }).overrideAttrs (old: {
-      #   nativeBuildInputs = [ git ];
-      # })
-
       beam27Packages.rebar3Relx {
         inherit pname version src;
         profile = "prod";
@@ -24,14 +16,13 @@ in
         checkouts =
           (beam27Packages.fetchRebar3Deps {
             inherit name version src;
-            # sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
-            # sha256 = "sha256-rF2dFDk5xY5+sGetaF0PK5/aK1cyZ9JBDGimxOQz3JE=";
-            sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
+            sha256 = "sha256-qz8wN2e7eOHpZxK9V0wXgzMBBcbS1w3TsbLQxr9MKn0=";
+          }).overrideAttrs (old: {
+            nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ git ];
+            # .git/hooks/ contains scripts with nix paths
+            preInstall = ''
+              rm -rf ./_build/default/lib/*/.git/
+            '';
           });
       }
-    ).overrideAttrs (old: {
-      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ git ];
-      postInstall = ''
-        echo "Deps fetched to $checkouts"
-      '';
-    })
+    )
