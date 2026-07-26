@@ -8,11 +8,18 @@ let
     src = ./.;
 
     # Refactor: looks bad
-    deps = import ./deps.nix {
-      lib = pkgs_otp27.lib;
+    # deps = import ./deps.nix {
+    #   lib = pkgs_otp27.lib;
+    #   stdenvNoCC = pkgs_otp27.stdenvNoCC;
+    #   rebar3 = pkgs_otp27.rebar3;
+    #   git = pkgs_otp27.git;
+    #   coreutils = pkgs_otp27.coreutils;
+    # };
+    deps = import ./deps2.nix {
       stdenv = pkgs_otp27.stdenv;
       rebar3 = pkgs_otp27.rebar3;
       git = pkgs_otp27.git;
+      cacert = pkgs_otp27.cacert;
     };
     # rebar3 = pkgs_otp27.beam27Packages.rebar3.overrideAttrs(
     #   old: {nativeBuildInputs = [pkgs_otp27.git];}
@@ -23,39 +30,59 @@ in
 
       # (beam27Packages.fetchRebar3Deps {
       #   inherit name version src;
-      #   sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
+      #   sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
       # }).overrideAttrs (old: {
       #   nativeBuildInputs = [ git ];
       # })
 
-
-      beam27Packages.rebar3Relx {
-        inherit pname version src;
-        profile = "prod";
-        releaseType = "release";
-        checkouts = (deps {
-            src = lib.fileset.toSource {
-              root = ./.;
-              fileset = lib.fileset.unions [
-                ./rebar.lock
-                ./rebar.config
-              ];
-            };
-            inherit name version;
-            sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
-        }).overrideAttrs (old: {
-            preInstall = "before:";
-            postInstall = ''
-              echo "Deps fetched to $checkouts"
-            '';
-        });
-        # checkouts =
-        #   beam27Packages.fetchRebar3Deps {
-        #     inherit name version src;
-        #     # sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
-        #     # sha256 = "sha256-rF2dFDk5xY5+sGetaF0PK5/aK1cyZ9JBDGimxOQz3JE=";
-        #     sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
-        #   };
-          # ();
-      }
+      (deps {
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./rebar.lock
+              ./rebar.config
+            ];
+          };
+          inherit name version;
+          # sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
+          # sha256 = "sha256-hj4WPGGPIlBXKq0dcujvFp8UN5THwhrlqctFSrd3Yok=";
+          sha256 = "sha256-UMdo4hOqHg1FgKO4w/PWOHoG69l77viwGVlEC7LgTWw=";
+      })
+      # .overrideAttrs (old: {
+          # preBuild = (old.preBuild or "") + ''
+          #   export PATH="${git}/bin:$PATH"
+          # '';
+          # postInstall = ''
+          #   echo "Deps fetched to $out"
+          # '';
+      # })
+      # beam27Packages.rebar3Relx {
+      #   inherit pname version src;
+      #   profile = "prod";
+      #   releaseType = "release";
+      #   checkouts = (deps {
+      #       src = lib.fileset.toSource {
+      #         root = ./.;
+      #         fileset = lib.fileset.unions [
+      #           ./rebar.lock
+      #           ./rebar.config
+      #         ];
+      #       };
+      #       inherit name version;
+      #       sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
+      #   }).overrideAttrs (old: {
+      #       preInstall = "before:";
+      #       postInstall = ''
+      #         echo "Deps fetched to $checkouts"
+      #       '';
+      #   });
+      #   # checkouts =
+      #   #   beam27Packages.fetchRebar3Deps {
+      #   #     inherit name version src;
+      #   #     # sha256 = "sha256-plUDn1sKZKlgcw0q5kpkhtxs2ifN50lyBpjgdpi3lZY=";
+      #   #     # sha256 = "sha256-rF2dFDk5xY5+sGetaF0PK5/aK1cyZ9JBDGimxOQz3JE=";
+      #   #     sha256 = "sha256-jv0kVdpsaISvBF60PYZXw0QGyXHcrJyqLB83Ptv8kMw=";
+      #   #   };
+      #     # ();
+      # }
     )
