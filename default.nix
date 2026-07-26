@@ -63,9 +63,10 @@ in
           # Added, cause rebar3 can't make a dir inside fetched directory
           # TODO no ${profile} reuse
           preBuild = ''
-            mkdir -p _build/prod/rel/redmine_tracker/bin
             ls -alF .
+            mkdir -p _build/default/bin
             ls -alF _build/default/bin
+            mkdir -p _build/prod/rel/redmine_tracker/bin
             ls -alF _build/prod/rel/redmine_tracker/
           '';
         }
