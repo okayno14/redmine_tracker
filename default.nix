@@ -10,7 +10,6 @@ let
 in
 with pkgs_otp27;
 (
-
   beam27Packages.rebar3Relx {
     inherit pname version src;
     profile = "prod";
