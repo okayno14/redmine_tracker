@@ -2,24 +2,25 @@
   stdenv,
   rebar3,
   git,
-  cacert
+  cacert,
 }:
-# { pkgs ? import <nixpkgs> {} }:
 
 {
   src,
   name,
   version,
-  sha256
+  sha256,
 }:
 stdenv.mkDerivation {
   pname = "my-erlang-deps-${name}";
-  inherit version;
-  inherit src;
-  # src = ./.; # Needs to contain rebar.config
+  inherit version src;
 
   # cacert is mandatory for SSL verification during git clone
-  nativeBuildInputs = [ rebar3 git cacert ];
+  nativeBuildInputs = [
+    rebar3
+    git
+    cacert
+  ];
 
   buildPhase = ''
     cp "$src/rebar.config" .
