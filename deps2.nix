@@ -32,14 +32,8 @@ stdenv.mkDerivation {
   installPhase = ''
     mkdir -p "$out/_checkouts"
 
-    rm -rf _build/default/lib/erl_utils/.git
-    cp -r _build/default/lib/erl_utils "$out/_checkouts"
-
-    rm -rf _build/default/lib/meck/.git*
-    cp -r _build/default/lib/meck "$out/_checkouts"
-
-    # rm -rf _build/default/lib/*/.git
-    # cp -r _build/default/lib/* "$out/"
+    rm -rf _build/default/lib/*/.git
+    cp -r _build/default/lib/* "$out/_checkouts/"
   '';
 
   # Fixed-Output Derivation settings
