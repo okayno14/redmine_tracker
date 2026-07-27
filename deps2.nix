@@ -36,7 +36,6 @@ stdenv.mkDerivation {
     cp -r _build/default/lib/erl_utils "$out/_checkouts"
 
     rm -rf _build/default/lib/meck/.git*
-    rm _build/default/lib/meck/.scripts/cut.sh
     cp -r _build/default/lib/meck "$out/_checkouts"
 
     # rm -rf _build/default/lib/*/.git
@@ -48,5 +47,5 @@ stdenv.mkDerivation {
   outputHashMode = "recursive";
   outputHash = sha256;
   dontUnpack = true;
-  # dontFixup = true;
+  dontFixup = true;
 }
