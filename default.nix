@@ -1,10 +1,9 @@
 let
-  pkgs_otp27 = import (builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/e6f23dc08d3624daab7094b701aa3954923c6bbb.tar.gz";
-  }) { };
-  name = "redmine_tracker";
-  pname = name;
-  version = "0.0.1";
+  inputs = import ./inputs.nix;
+  pkgs_otp27 = inputs.pkgs_otp27;
+  name = inputs.name;
+  pname = inputs.pname;
+  version = inputs.version;
   src = ./.;
 in
 with pkgs_otp27;
