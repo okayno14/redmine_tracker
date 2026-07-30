@@ -178,28 +178,72 @@ end_track_last() ->
     db:transaction_ret(CSV :: unicode:unicode_binary()).
 %%--------------------------------------------------------------------
 export_to_csv() ->
+    % fun(_) -> ~"x" end
+    export_to_csv(fun track:to_csv/1).
+
+export_to_csv(ToCsv) ->
     F = fun() ->
         compose:compose(
             [
-                fun(TrackList) ->
-                    lists:foldl(
-                        fun
-                            (CSV, <<"">>) ->
-                                CSV;
-                            (CSV, Acc) when is_binary(Acc), is_binary(CSV) ->
-                                <<Acc/binary, "\n", CSV/binary>>
-                        end,
-                        <<"">>,
-                        [track:to_csv(Track) || Track <- TrackList]
-                    )
+                fun(X) -> maps:get(csv, X) end,
+                fun(X) ->
+                    #{csv := Tracks} = X,
+                    X#{csv => unicode:characters_to_binary(Tracks)}
                 end,
-                fun(_) -> tracks:all_sorted_by_timestamp_start() end
+                fun(X) ->
+                    #{csv := Tracks} = X,
+                    [_ | T] = lists:reverse(Tracks),
+                    X#{csv => T}
+                end,
+                fun(X) -> tracks_to_csv(ToCsv, X) end,
+                fun(X) ->
+                    Tracks = tracks:all_sorted_by_timestamp_start(),
+                    X#{
+                        csv => Tracks,
+                        timestamp => track:ts_begin(erlang:hd(Tracks))
+                    }
+                end
             ],
-            []
+            #{
+                csv => [],
+                timestamp => {{0, 0, 0}, {0, 0, 0}}
+            }
         )
     end,
     %% TODO можно сделать dirty-функцию
     db:transaction(F).
+
+tracks_to_csv(_ToCsv, []) ->
+    [];
+tracks_to_csv(ToCsv, X) ->
+    #{csv := Tracks} = X,
+    lists:foldl(
+        fun(
+            Track,
+            #{csv := CSV, timestamp := TS}
+        ) when is_list(CSV) ->
+            compose:if_else(
+                fun(X2) ->
+                    track:is_timestamps_at_one_date(X2, TS)
+                end,
+                fun(X2) ->
+                    #{
+                        csv => [ToCsv(X2), ~"\n" | CSV],
+                        timestamp => track:ts_begin(X2)
+                    }
+                end,
+                fun(X2) ->
+                    #{
+                        csv => [ToCsv(X2), ~"\n", ~"\n" | CSV],
+                        timestamp => track:ts_begin(X2)
+                    }
+                end,
+                Track
+            )
+        end,
+        X#{csv => []},
+        Tracks
+    ).
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------

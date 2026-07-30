@@ -21,6 +21,7 @@
     make/7,
     new/8,
     validate/1,
+    ts_begin/1,
     is_timestamps_at_one_date/2,
     is_timestamps_positive/2,
     id/1,
@@ -155,6 +156,9 @@ validate(Track = #track{}) ->
         )
     ).
 %%--------------------------------------------------------------------
+
+ts_begin(Track = #track{}) ->
+  Track#track.timestamp_begin.
 
 %%--------------------------------------------------------------------
 -type validate_id_err() ::
