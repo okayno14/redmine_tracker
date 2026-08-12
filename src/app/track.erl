@@ -617,9 +617,10 @@ to_csv(Track) ->
     RedmineInstance :: unicode:unicode_binary(),
     ApiKey :: unicode:unicode_binary()
 ) ->
-    ok | {error, Reason :: term()}.
+    ok
+    | {error, {Code::non_neg_integer(), HttpBodyResult :: binary()}}
+    | {error, Reason :: term()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
-    %% TODO в некоторых случаях апи редмайна возвращает ошибки внутри 200-ых кодов
     XML = to_xml(Track, UserId, oneline),
     true = is_binary(XML),
     ?LOG_DEBUG(
@@ -652,20 +653,45 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
             ]
         )
     of
-        %% TODO вот тут надо матчить код ответа, пока считаем, что если ok, то нам отдали xml-ку
-        {ok, Resp} ->
+        {
+            ok,
+            Resp = {
+                _StatusLine = {_HttpVersion, 201, "Created"},
+                _Headers,
+                _HttpBodyResult
+            }
+        } ->
             ?LOG_DEBUG(
                 fun(_) ->
                     {
-                        "Response:~ts",
+                        "Response:\n~ts",
                         [format_resp(Resp, fun format_body/1)]
                     }
                 end,
                 []
             ),
             ok;
+        %% 422 Unprocessable Entity https://www.redmine.org/projects/redmine/wiki/Rest_TimeEntries#Creating-a-time-entry
+        {
+            ok,
+            Resp = {
+                _StatusLine = {_HttpVersion, Code, _String},
+                _Headers,
+                HttpBodyResult
+            }
+        } ->
+            ?LOG_WARNING(
+                fun(_) ->
+                    {
+                        "Error Respone:\n~ts",
+                        [format_resp(Resp, fun format_body/1)]
+                    }
+                end,
+                []
+            ),
+            {error, {Code, HttpBodyResult}};
         {error, Reason} ->
-            ?LOG_WARNING("Reason:~p", [Reason]),
+            ?LOG_WARNING("Some Error with Reason:~p", [Reason]),
             {error, Reason}
     end.
 
