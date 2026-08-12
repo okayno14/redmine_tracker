@@ -662,12 +662,7 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
             }
         } ->
             ?LOG_DEBUG(
-                fun(_) ->
-                    {
-                        "Response:\n~ts",
-                        [format_resp(Resp, fun format_body/1)]
-                    }
-                end,
+                fun(_) -> {"Response:\n~ts", [format_resp(Resp)]} end,
                 []
             ),
             ok;
@@ -681,12 +676,7 @@ push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
             }
         } ->
             ?LOG_WARNING(
-                fun(_) ->
-                    {
-                        "Error Respone:\n~ts",
-                        [format_resp(Resp, fun format_body/1)]
-                    }
-                end,
+                fun(_) -> {"Error Respone:\n~ts", [format_resp(Resp)]} end,
                 []
             ),
             {error, {Code, HttpBodyResult}};
@@ -983,15 +973,8 @@ activity(ActivityDesc, Activities) ->
 %%% redmine_api.response
 %%%===================================================================
 
-format_resp({StatusCode, Body}, FormatBody) ->
-    format_resp({StatusCode, FormatBody(Body)});
-format_resp({StatusLine, Headers, Body}, FormatBody) ->
-    format_resp({StatusLine, Headers, FormatBody(Body)}).
-
-format_resp({StatusCode, Body}) ->
-    io_lib:format("~p\n~ts", [StatusCode, Body]);
 format_resp({StatusLine, Headers, Body}) ->
-    io_lib:format("~p\n~p\n~ts", [StatusLine, Headers, Body]).
+    io_lib:format("~p\n~p\n~ts", [StatusLine, Headers, format_body(Body)]).
 
 format_body(Body) ->
     compose:compose(
