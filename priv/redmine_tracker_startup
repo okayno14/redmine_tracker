@@ -5,5 +5,5 @@ if [ -f $CONFIG ]; then
   export RELX_CONFIG_PATH
 fi
 
-./redmine_tracker $*
+redmine_tracker $*
 
