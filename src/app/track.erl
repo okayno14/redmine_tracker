@@ -55,7 +55,8 @@
 -export_type([
     track/0,
     from_csv_err/0,
-    validate_err/0
+    validate_err/0,
+    push_to_redmine_reason/0
 ]).
 
 -opaque track() :: #track{}.
@@ -611,15 +612,17 @@ to_csv(Track) ->
         StateBin/binary, ";"
     >>.
 
+-type push_to_redmine_reason() ::
+    {Code::non_neg_integer(), HttpBodyResult :: binary()}
+    | term().
+
 -spec push_to_redmine(
     Track :: track(),
     UserId :: pos_integer(),
     RedmineInstance :: unicode:unicode_binary(),
     ApiKey :: unicode:unicode_binary()
 ) ->
-    ok
-    | {error, {Code::non_neg_integer(), HttpBodyResult :: binary()}}
-    | {error, Reason :: term()}.
+    ok | {error, push_to_redmine_reason()}.
 push_to_redmine(Track, UserId, RedmineInstance, ApiKey) ->
     XML = to_xml(Track, UserId, oneline),
     true = is_binary(XML),

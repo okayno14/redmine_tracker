@@ -109,7 +109,7 @@ route(Req = #{request := ~"begin_track"}) ->
             end
         end
     };
-route(Req = #{request := ~"end_track_last"}) ->
+route(#{request := ~"end_track_last"}) ->
     {
         fun() -> track_composed:end_track_last() end,
         fun(Either) ->
@@ -120,6 +120,11 @@ route(Req = #{request := ~"end_track_last"}) ->
                     response:error_response(end_track_last, Msg)
             end
         end
+    };
+route(#{request := ~"push_to_redmine"}) ->
+    {
+        fun() -> track_composed:push_to_redmine() end,
+        fun(_) -> nomatch end
     };
 route(_UnknownReq) ->
     ?LOG_ERROR("Unkown Req:~p", [_UnknownReq]),

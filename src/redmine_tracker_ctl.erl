@@ -54,6 +54,10 @@ cli() ->
             "end_track_last" => #{
                 arguments => [],
                 handler => fun end_track_last/1
+            },
+            "push_to_redmine" => #{
+                arguments => [],
+                handler => fun push_to_redmine/1
             }
         }
     }.
@@ -129,6 +133,11 @@ begin_track(Args = #{}) ->
 
 end_track_last(Args = #{}) ->
     Req = fun() -> either:right(request:encode(#{request => ~"end_track_last"}, oneline)) end,
+    ProcessResp = fun(_) -> nomatch end,
+    process_request(Req, ProcessResp).
+
+push_to_redmine(Args = #{}) ->
+    Req = fun() -> either:right(request:encode(#{request => ~"push_to_redmine"}, oneline)) end,
     ProcessResp = fun(_) -> nomatch end,
     process_request(Req, ProcessResp).
 

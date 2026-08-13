@@ -41,7 +41,9 @@ route(Request) ->
                         unicode:characters_to_binary(io_lib:format("~p", [Reason]))
                     );
                 {true, X} ->
-                    response:ok_response(io_lib:format("~p", [X]))
+                    response:ok_response(
+                        unicode:characters_to_binary(io_lib:format("~p", [X]))
+                    )
             end
         end,
     Ret = Transaction(),
