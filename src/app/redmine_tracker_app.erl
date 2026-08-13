@@ -40,8 +40,11 @@ set_path() ->
                     }
                 of
                     %% XDG_STATE_HOME can be undefined
-                    {Str, error} when is_binary(Str) -> <<"~/.local/state/redmine_tracker">>;
-                    {_, {ok, DbPath2}} -> DbPath2
+                    {Str, error} when is_binary(Str) ->
+                      {ok, DbPath2} = path:expand(<<"~/.local/state/redmine_tracker">>),
+                      DbPath2;
+                    {_, {ok, DbPath2}} ->
+                      DbPath2
                 end
             end,
             fun(_) ->
