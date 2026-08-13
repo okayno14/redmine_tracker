@@ -311,7 +311,17 @@ import_from_csv(CSV) when is_binary(CSV) ->
     db:transaction(F).
 %%--------------------------------------------------------------------
 
+-spec push_to_redmine() ->
+    db:transaction_ret(
+        %% TODO change to track_id()
+        {error, [{Id :: pos_integer(), track:push_to_redmine_reason()}]}
+        | {error, {not_configured, Key :: atom()}},
+        ok
+    ).
 push_to_redmine() ->
+    db:transaction(fun push_to_redmine_/0).
+
+push_to_redmine_() ->
     Param =
         fun(Config, Key) ->
             case proplists:get_value(Key, Config, not_found) of
@@ -339,16 +349,22 @@ push_to_redmine() ->
 
     compose:compose(
         [
+            fun db:either_throw/1,
             fun(Either) ->
                 either:flatmap(
                     Either,
-                    fun(Tracks) ->
-                        db:transaction(fun() -> [track:delete(Track) || Track <- Tracks] end)
+                    fun(X) ->
+                        #{tracks := Tracks, error_list := ErrorList} = X,
+                        [track:delete(Track) || Track <- Tracks],
+                        case ErrorList of
+                            [] -> either:right(ok);
+                            _ -> either:left(ErrorList)
+                        end
                     end
                 )
             end,
             fun(Either) ->
-                either:flatmap(
+                either:map(
                     Either,
                     fun(X) ->
                         #{
@@ -357,21 +373,18 @@ push_to_redmine() ->
                             api_key := ApiKey,
                             tracks := Tracks
                         } = X,
-                        Ret =
+                        {Tracks3, ErrorList2} =
                             lists:foldl(
-                                fun(Track, ErrorList) ->
+                                fun(Track, {Tracks2, ErrorList}) ->
                                     case track:push_to_redmine(Track, UserId, RedmineInstance, ApiKey) of
-                                        ok -> ErrorList;
-                                        {error, Reason} -> [{track:id(Track), Reason} | ErrorList]
+                                        ok -> {[Track | Tracks2], ErrorList};
+                                        {error, Reason} -> {Tracks2, [{track:id(Track), Reason} | ErrorList]}
                                     end
                                 end,
-                                [],
+                                {[], []},
                                 Tracks
                             ),
-                        case Ret of
-                            [] -> either:right(Tracks);
-                            _ -> either:left({error, {push, Ret}})
-                        end
+                        X#{tracks => Tracks3, error_list => ErrorList2}
                     end
                 )
             end,
@@ -388,13 +401,7 @@ push_to_redmine() ->
                     end
                 )
             end,
-            fun(X) ->
-                either:cata(
-                    db:transaction(fun tracks:all/0),
-                    fun(Reason) -> {error, {db_fetch, Reason}} end,
-                    fun(Tracks) -> X#{tracks => Tracks} end
-                )
-            end
+            fun(X) -> either:right(X#{tracks => tracks:all()}) end
         ],
         #{}
     ).
