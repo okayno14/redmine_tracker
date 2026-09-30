@@ -140,7 +140,7 @@ end_track_last() ->
                             TsEnd = calendar:local_time(),
                             compose:if_else(
                                 fun(_) ->
-                                    track:is_timestamps_at_one_date(Track, TsEnd),
+                                    track:is_timestamps_at_one_date(Track, TsEnd) andalso
                                     track:is_timestamps_positive(Track, TsEnd)
                                 end,
                                 fun(_) ->
@@ -178,8 +178,9 @@ end_track_last() ->
     db:transaction_ret(CSV :: unicode:unicode_binary()).
 %%--------------------------------------------------------------------
 export_to_csv() ->
-    % fun(_) -> ~"x" end
-    db:transaction(fun() -> export_to_csv(fun track:to_csv/1) end).
+    TrackTranslator = track_translator_strategy:make(<<"csv">>),
+    ToCsv = fun(Track) -> track_translator:export(TrackTranslator, [track:to_map(Track)]) end,
+    db:transaction(fun() -> export_to_csv(ToCsv) end).
 
 export_to_csv(ToCsv) ->
     compose:compose(
@@ -289,23 +290,21 @@ import_from_csv(CSV) when is_binary(CSV) ->
                     )
                 end,
                 fun(X) ->
-                    either:flatmap(
+                    either:map(
                         X,
-                        fun(Activities) ->
-                            tracks:from_csv_all(CSV, Activities)
+                        fun(L) ->
+                            lists:map(fun track:from_map/1, L)
                         end
                     )
                 end,
-                fun(_) ->
-                    compose:if_else(
-                        fun either:is_right/1,
-                        fun(EitherActivities) -> either:right(either:extract(EitherActivities)) end,
-                        fun(_) -> either:left({error, <<"Activities DB empty">>}) end,
-                        track:activities()
+                fun(X) ->
+                    track_translator:import(
+                        track_translator_strategy:make(<<"csv">>),
+                        X
                     )
                 end
             ],
-            []
+            CSV
         )
     end,
     db:transaction(F).

@@ -26,9 +26,8 @@
     is_timestamps_positive/2,
     id/1,
     finish/2,
-    from_csv/2,
-    to_csv/1,
-
+    to_map/1,
+    from_map/1,
     activity/2
 ]).
 
@@ -54,12 +53,34 @@
 
 -export_type([
     track/0,
-    from_csv_err/0,
+    external_map/0,
     validate_err/0,
-    push_to_redmine_reason/0
+    push_to_redmine_reason/0,
+    activites/0,
+    activity/0
 ]).
 
 -opaque track() :: #track{}.
+
+-type external_map() :: #{
+    id := pos_integer(),
+    project_id := unicode:unicode_binary(),
+    activity := activity(),
+    state := track_state(),
+    task := unicode:unicode_binary(),
+    timestamp_begin := calendar:datetime(),
+    timestamp_end := calendar:datetime(),
+    desc := unicode:unicode_binary()
+}.
+
+-type activites() ::
+    #{
+        ActivityDesc :: unicode:unicode_binary() => ActivityID :: pos_integer()
+    }.
+
+-type activity() :: {
+    ActivityID :: pos_integer(), Activity :: unicode:unicode_binary()
+}.
 
 %%%===================================================================
 %%% track
@@ -375,7 +396,7 @@ validate_timestamps(Track) ->
                 validation:flatmap(
                     V,
                     fun(Track2) ->
-                        case is_datetime(Track2#track.timestamp_end) of
+                        case datetime:is_datetime(Track2#track.timestamp_end) of
                             true ->
                                 validation:validation(Track2);
                             false ->
@@ -395,7 +416,7 @@ validate_timestamps(Track) ->
                 validation:flatmap(
                     V,
                     fun(Track2) ->
-                        case is_datetime(Track2#track.timestamp_begin) of
+                        case datetime:is_datetime(Track2#track.timestamp_begin) of
                             true ->
                                 validation:validation(Track2);
                             false ->
@@ -435,6 +456,9 @@ is_timestamps_at_one_date(Track2, TsEnd) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
+-spec is_timestamps_positive(Track2 :: track(), TsEnd :: calendar:datetime()) ->
+    boolean().
+%%--------------------------------------------------------------------
 is_timestamps_positive(Track2, TsEnd) ->
     seconds(Track2#track.timestamp_begin, TsEnd) > 0.
 %%--------------------------------------------------------------------
@@ -456,161 +480,35 @@ finish(Track, TsEnd) ->
     Track#track{state = finished, timestamp_end = TsEnd}.
 %%--------------------------------------------------------------------
 
--type from_csv_err() ::
-    {error, state, {error, Msg :: unicode:unicode_binary()}}
-    | {error, timestamp_end, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
-    | {error, timestamp_begin, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
-    | {error, {id, Msg :: unicode:unicode_binary()}}
-    | {error, activity, {error, not_found}}
-    | {error, {bad_csv, Msg :: unicode:unicode_binary()}}.
+-spec to_map(Track :: track()) ->
+    external_map().
+to_map(Track = #track{}) ->
+    maps:from_list(?R2L(Track, track)).
 
--spec from_csv(CSV :: unicode:unicode_binary(), Activities :: activites()) ->
-    either:either(
-        from_csv_err(),
-        track()
-    ).
-from_csv(CSV, Activities) ->
-    compose:compose(
-        [
-            fun(Either) ->
-                either:map(
-                    Either,
-                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        track:new(
-                            IDBin,
-                            ProjectID,
-                            Activity,
-                            TaskBin,
-                            TsBeginBin,
-                            TsEndBin,
-                            DescBin,
-                            StateBin
-                        )
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun
-                        ([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
-                        when
-                            StateBin == <<"tracking">>; StateBin == <<"finished">>
-                        ->
-                            either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, erlang:binary_to_atom(StateBin)]);
-                        ([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                            either:left({error, state, {error, <<"State must be \"finished\" or \"tracking\"">>}})
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    %% TODO переименовать с Bin на просто ID
-                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        X = binary_to_datetime_2(TsEndBin),
-                        case either:is_left(X) of
-                            true -> either:left({error, timestamp_end, either:extract(X)});
-                            false -> either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, either:extract(X), DescBin, StateBin])
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    %% TODO переименовать с Bin на просто ID
-                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        X = binary_to_datetime_2(TsBeginBin),
-                        case either:is_left(X) of
-                            true -> either:left({error, timestamp_begin, either:extract(X)});
-                            false -> either:right([IDBin, ProjectID, TaskBin, Activity, either:extract(X), TsEndBin, DescBin, StateBin])
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        try
-                            either:right([erlang:binary_to_integer(IDBin), ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
-                        catch
-                            Class:Reason:StackTrace ->
-                                either:left({error, {id, <<"Id contains non-numeric symbols">>}})
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun([IDBin, ProjectID, TaskBin, ActivityDesc, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        either:cata(
-                            activity(ActivityDesc, Activities),
-                            fun(_) -> {error, activity, {error, not_found}} end,
-                            fun(Activity) -> [IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin] end
-                        )
-                    end
-                )
-            end,
-            %% Any csv field can be enclosed in double quotes
-            fun(Either) ->
-                either:map(
-                    Either,
-                    fun(L) -> lists:map(fun(X) -> string:trim(X, both, "\"") end, L) end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun
-                        (X = [_, _, _, _, _, _, _, _]) -> either:right(X);
-                        (_) -> either:left({error, {bad_csv, <<"Failed to split csv-line">>}})
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:map(Either, fun(X) -> string:split(X, <<",">>, all) end)
-            end,
-            fun(Either) ->
-                either:map(Either, fun(X) -> string:trim(X, trailing, ";") end)
-            end
-        ],
-        either:right(CSV)
-    ).
-%%--------------------------------------------------------------------
+-spec from_map(Map :: external_map()) ->
+    track().
+from_map(Map) ->
+    #{
+        id := Id,
+        project_id := ProjectID,
+        activity := Activity,
+        task := Task,
+        timestamp_begin := TsBegin,
+        timestamp_end := TsEnd,
+        desc := Desc,
+        state := State
+    } = Map,
 
-%% экспортировать в csv-строку рекорд
--spec to_csv(Track :: track()) ->
-    CSV :: unicode:unicode_binary().
-to_csv(Track) ->
-    #track{
-        id = Id,
-        project_id = ProjectID,
-        activity = {_ActivityID, Activity},
-        state = State,
-        task = Task,
-        timestamp_begin = TsBegin,
-        timestamp_end = TsEnd,
-        desc = Desc
-    } = Track,
-    IDBin = erlang:integer_to_binary(Id),
-    StateBin = erlang:atom_to_binary(State),
-    TaskBin = Task,
-    TsBeginBin = datetime_to_binary(TsBegin),
-    TsEndBin = datetime_to_binary(TsEnd),
-    DescBin = Desc,
-    <<
-        IDBin/binary, ",",
-        "\"", ProjectID/binary, "\"", ",",
-        "\"", TaskBin/binary, "\"", ",",
-        Activity/binary,",",
-        "\"", TsBeginBin/binary, "\"", ",",
-        "\"", TsEndBin/binary, "\"", ",",
-        "\"", DescBin/binary, "\"", ",",
-        StateBin/binary, ";"
-    >>.
+    new(
+        Id,
+        ProjectID,
+        Activity,
+        Task,
+        TsBegin,
+        TsEnd,
+        Desc,
+        State
+    ).
 
 -type push_to_redmine_reason() ::
     {Code::non_neg_integer(), HttpBodyResult :: binary()}
@@ -726,7 +624,7 @@ to_xml(Track, UserId, Format) ->
                                 erlang:binary_to_list(
                                     begin
                                         [X | _] = string:split(
-                                            datetime_to_binary(TsBegin), <<" ">>
+                                            datetime:to_binary(TsBegin), <<" ">>
                                         ),
                                         true = is_binary(X),
                                         X
@@ -750,147 +648,6 @@ to_xml(Track, UserId, Format) ->
 seconds(TsBegin, TsEnd) ->
     (calendar:datetime_to_gregorian_seconds(TsEnd) -
         calendar:datetime_to_gregorian_seconds(TsBegin)) / 3600.
-
-is_datetime({{Y, Month, D}, {H, Min, S}})
-when
-    is_integer(Y),
-    is_integer(Month), Month >= 1, Month =< 12,
-    is_integer(D), D >= 1, D =< 31,
-    is_integer(H), H >= 0, H =< 23,
-    is_integer(Min), Min >= 0, Min =< 59,
-    is_integer(S), S >= 0, S =< 59
-->
-    true;
-is_datetime(_) ->
-    false.
-
-datetime_to_binary(DateTime) ->
-    {{Y, Month, D}, {H, Min, S}} = DateTime,
-    FormatNumber =
-        fun
-            (X) when is_integer(X), X >= 0, X =< 9 -> io_lib:format("0~p", [X]);
-            (X) when is_integer(X), X > 9 -> io_lib:format("~p", [X])
-        end,
-    erlang:list_to_binary(
-        io_lib:format("~p-~s-~s ~s:~s:~s", [
-            Y,
-            FormatNumber(Month),
-            FormatNumber(D),
-            FormatNumber(H),
-            FormatNumber(Min),
-            FormatNumber(S)
-        ])
-    ).
-
--spec binary_to_datetime_2(DateTimeBin :: unicode:unicode_binary()) ->
-    either:either(
-        {error, {bad_datetime, Msg :: unicode:unicode_binary()}},
-        calendar:datetime()
-    ).
-binary_to_datetime_2(DateTimeBin) ->
-    compose:compose(
-        [
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun({_Date, Time}) ->
-                        try
-                            either:right(
-                                {_Date,
-                                    erlang:list_to_tuple(
-                                        lists:map(
-                                            fun(X) when is_binary(X) -> erlang:binary_to_integer(X) end, Time
-                                        )
-                                    )}
-                            )
-                        catch
-                            _:_:_ ->
-                                either:left(
-                                    {error,
-                                        {bad_datetime,
-                                            <<"Time contains non-numeric symbols">>}}
-                                )
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun({_Date, Time}) ->
-                        case string:split(Time, <<":">>, all) of
-                            L = [H, M, S] ->
-                                either:right({_Date, L});
-                            _ ->
-                                either:left(
-                                    {error, {bad_datetime, <<"Failed to split time">>}}
-                                )
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun({Date, _Time}) ->
-                        try
-                            either:right({
-                                erlang:list_to_tuple(
-                                    lists:map(fun(X) when is_binary(X) -> erlang:binary_to_integer(X) end, Date)
-                                ),
-                                _Time
-                            })
-                        catch
-                            _:_:_ ->
-                                either:left(
-                                    {error,
-                                        {bad_datetime,
-                                            <<"Date contains non-numeric symbols">>}}
-                                )
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun({Date, _Time}) ->
-                        case string:split(Date, <<"-">>, all) of
-                            L = [Y, M, D] ->
-                                either:right({L, _Time});
-                            _ ->
-                                either:left(
-                                    {error, {bad_datetime, <<"Failed to split date">>}}
-                                )
-                        end
-                    end
-                )
-            end,
-            fun(Either) ->
-                either:flatmap(
-                    Either,
-                    fun(X) ->
-                        case
-                            string:split(
-                                string:trim(X, both, "\""), <<" ">>, all
-                            )
-                        of
-                            [DateBin, TimeBin] ->
-                                either:right({DateBin, TimeBin});
-                            _ ->
-                                either:left(
-                                    {error,
-                                        {bad_datetime,
-                                            <<"Failed to split date and time">>}}
-                                )
-                        end
-                    end
-                )
-            end
-        ],
-        either:right(DateTimeBin)
-    ).
-
 
 %%%===================================================================
 %%% track.db
