@@ -7,7 +7,7 @@
     %% если последний трекинг незавершённый, то завершаем его
     end_track_last/0,
     %% экспортировать всю базу в csv
-    export_to_csv/0,
+    export_to_csv/1,
     %% переписать всю базу содержимым csv
     import_from_csv/2,
     %% очистить всю базу и отправить в redmine_api
@@ -174,46 +174,99 @@ end_track_last() ->
 
 %%--------------------------------------------------------------------
 %% TODO надо добавить сортировку по id
--spec export_to_csv() ->
+-spec export_to_csv(Format :: unicode:unicode_binary()) ->
     db:transaction_ret(CSV :: unicode:unicode_binary()).
 %%--------------------------------------------------------------------
-export_to_csv() ->
-    TrackTranslator = either:extract(track_translator_strategy:make(<<"csv">>)),
-    ToCsv = fun(Track) -> track_translator:export(TrackTranslator, [track:to_map(Track)]) end,
-    db:transaction(fun() -> export_to_csv(ToCsv) end).
+export_to_csv(Format) when is_binary(Format) ->
+    db:transaction(fun() -> export_to_csv_(Format) end).
 
-export_to_csv(ToCsv) ->
+export_to_csv_(Format) ->
     compose:compose(
         [
-            fun(X) -> maps:get(csv, X) end,
+            fun db:either_throw/1,
             fun(X) ->
-                #{csv := Tracks} = X,
-                X#{csv => unicode:characters_to_binary(Tracks)}
+                either:cata(
+                    X,
+                    fun({error, unknown_format}) ->
+                        Msg =
+                            unicode:characters_to_binary([
+                                <<"No translator for ">>,
+                                <<"\"">>, Format, <<"\"">>, <<" ">>,
+                                <<"format.">>
+                            ]),
+                        {error, Msg}
+                    end,
+                    fun(Y) -> Y end
+                )
             end,
-            fun
-                (X = #{csv := []}) -> X;
-                (X) ->
-                    #{csv := Tracks} = X,
-                    [_ | T] = lists:reverse(Tracks),
-                    X#{csv => T}
+            fun(X) ->
+                either:map(
+                    X,
+                    fun(Args) ->
+                        #{csv := Tracks} = Args,
+                        unicode:characters_to_binary(Tracks)
+                    end
+                )
             end,
-            fun(X) -> tracks_to_csv(ToCsv, X) end,
-            fun
-                (X = #{csv := []}) -> X;
-                (X = #{csv := Tracks}) -> X#{timestamp => track:ts_begin(erlang:hd(Tracks))}
+            fun(X) ->
+                either:map(
+                    X,
+                    fun
+                         (Args = #{csv := []}) ->
+                             Args;
+                         (Args) ->
+                             #{csv := Tracks} = Args,
+                             [_ | T] = lists:reverse(Tracks),
+                             Args#{csv => T}
+                     end
+                )
             end,
-            fun(X) -> X#{csv => tracks:all_sorted_by_timestamp_start()} end
+            fun(X) ->
+                either:map(
+                    X,
+                    fun tracks_to_csv/1
+                )
+            end,
+            fun(X) ->
+                either:map(
+                    X,
+                    fun
+                        (Args = #{csv := []}) -> Args;
+                        (Args = #{csv := Tracks}) -> Args#{timestamp => track:ts_begin(erlang:hd(Tracks))}
+                    end
+                )
+            end,
+            fun(X) ->
+                either:map(
+                    X,
+                    fun(Args) ->
+                        Args#{csv => tracks:all_sorted_by_timestamp_start()}
+                    end
+                )
+            end,
+            fun(X) ->
+                either:map(
+                    X,
+                    fun(TrackTranslator) ->
+                        #{
+                            to_csv => fun(Track) -> track_translator:export(TrackTranslator, [track:to_map(Track)]) end,
+                            csv => [],
+                            timestamp => {{0, 0, 0}, {0, 0, 0}}
+                        }
+                    end
+                )
+            end
         ],
-        #{
-            csv => [],
-            timestamp => {{0, 0, 0}, {0, 0, 0}}
-        }
+        track_translator_strategy:make(Format)
     ).
 
-tracks_to_csv(_ToCsv, []) ->
-    [];
-tracks_to_csv(ToCsv, X) ->
-    #{csv := Tracks} = X,
+tracks_to_csv(X = #{csv := []}) ->
+    X;
+tracks_to_csv(X) ->
+    #{
+        csv := Tracks,
+        to_csv := ToCsv
+    } = X,
     lists:foldl(
         fun(
             Track,

@@ -6,10 +6,11 @@
 
 -export([route/1]).
 
-route(#{request := <<"export_to_csv">>}) ->
+route(Arg = #{request := <<"export_to_csv">>}) ->
+    #{<<"format">> := Format} = Arg,
     {
         fun() ->
-            track_composed:export_to_csv()
+            track_composed:export_to_csv(Format)
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of
