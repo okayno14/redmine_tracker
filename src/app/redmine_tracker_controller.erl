@@ -18,10 +18,11 @@ route(#{request := <<"export_to_csv">>}) ->
             end
         end
     };
-route(#{request := <<"import_from_csv">>, <<"csv">> := CSV}) ->
+route(Arg = #{request := <<"import_from_csv">>}) ->
+    #{<<"csv">> := CSV, <<"format">> := Format} = Arg,
     {
         fun() ->
-            track_composed:import_from_csv(CSV)
+            track_composed:import_from_csv(CSV, Format)
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of

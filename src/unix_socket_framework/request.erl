@@ -6,7 +6,10 @@
     format/1
 ]).
 
--export_type([request/0]).
+-export_type([
+    request/0,
+    encode_map/0
+]).
 
 -eqwalizer({nowarn_function, format/1}).
 
@@ -16,7 +19,13 @@
         binary() => json:decode_value()
     }.
 
--spec encode(Binary :: request(), oneline | indent) ->
+-type encode_map() ::
+    #{
+        request := unicode:unicode_binary(),
+        atom() | unicode:unicode_binary() => json:encode_value()
+    }.
+
+-spec encode(Map :: encode_map(), oneline | indent) ->
     JSON :: unicode:unicode_binary().
 encode(Request = #{request := _}, oneline) ->
     json2:encode(Request, oneline);
