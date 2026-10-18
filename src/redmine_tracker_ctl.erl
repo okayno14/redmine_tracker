@@ -12,7 +12,14 @@ cli() ->
         arguments => [],
         commands => #{
             "export_to_csv" => #{
-                arguments => [],
+                arguments => [
+                    #{
+                        name => format,
+                        default => <<"csv">>,
+                        type => binary,
+                        help => <<"Type format for exported tracks">>
+                    }
+                ],
                 handler => fun export_to_csv/1
             },
             "import_from_csv" => #{
@@ -68,7 +75,19 @@ cli() ->
         }
     }.
 
-export_to_csv(#{}) ->
+export_to_csv(Arg = #{}) ->
+    Req =
+        fun() ->
+            either:right(
+                request:encode(
+                    #{
+                        request => <<"export_to_csv">>,
+                        format => maps:get(format, Arg)
+                    },
+                    oneline
+                )
+            )
+        end,
     ProcessResp =
         fun
             (#{type := ok, data := CSV}) ->
@@ -76,10 +95,6 @@ export_to_csv(#{}) ->
                 ok;
             (_) ->
                 nomatch
-        end,
-    Req =
-        fun() ->
-            either:right(request:encode(#{request => <<"export_to_csv">>}, oneline))
         end,
     process_request(Req, ProcessResp).
 
