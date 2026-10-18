@@ -9,7 +9,7 @@
     %% экспортировать всю базу в csv
     export_to_csv/0,
     %% переписать всю базу содержимым csv
-    import_from_csv/1,
+    import_from_csv/2,
     %% очистить всю базу и отправить в redmine_api
     push_to_redmine/0
 ]).
@@ -178,7 +178,7 @@ end_track_last() ->
     db:transaction_ret(CSV :: unicode:unicode_binary()).
 %%--------------------------------------------------------------------
 export_to_csv() ->
-    TrackTranslator = track_translator_strategy:make(<<"csv">>),
+    TrackTranslator = either:extract(track_translator_strategy:make(<<"csv">>)),
     ToCsv = fun(Track) -> track_translator:export(TrackTranslator, [track:to_map(Track)]) end,
     db:transaction(fun() -> export_to_csv(ToCsv) end).
 
@@ -244,14 +244,16 @@ tracks_to_csv(ToCsv, X) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec import_from_csv(CSV :: unicode:unicode_binary()) ->
+-spec import_from_csv(
+    CSV :: unicode:unicode_binary(), Format :: unicode:unicode_binary()
+) ->
     db:transaction_ret(
         tracks:from_csv_all_err()
         | {error, Msg :: unicode:unicode_binary()},
         ok
     ).
 %%--------------------------------------------------------------------
-import_from_csv(CSV) when is_binary(CSV) ->
+import_from_csv(CSV, Format) when is_binary(CSV), is_binary(Format) ->
     F = fun() ->
         compose:compose(
             [
@@ -298,9 +300,28 @@ import_from_csv(CSV) when is_binary(CSV) ->
                     )
                 end,
                 fun(X) ->
-                    track_translator:import(
-                        track_translator_strategy:make(<<"csv">>),
-                        X
+                    either:flatmap(
+                        X,
+                        fun({TrackTranslator, CSV2}) ->
+                            track_translator:import(TrackTranslator, CSV2)
+                        end
+                    )
+                end,
+                fun(X) ->
+                    either:cata(
+                        track_translator_strategy:make(Format),
+                        fun({error, unknown_format}) ->
+                            Msg =
+                                unicode:characters_to_binary([
+                                    <<"No translator for ">>,
+                                    <<"\"">>, Format, <<"\"">>, <<" ">>,
+                                    <<"format.">>
+                                ]),
+                            {error, Msg}
+                        end,
+                        fun(TrackTranslator) ->
+                            {TrackTranslator, CSV}
+                        end
                     )
                 end
             ],

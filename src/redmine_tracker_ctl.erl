@@ -22,6 +22,12 @@ cli() ->
                         default => <<"stdin">>,
                         type => binary,
                         help => <<"\"stdin\"  or \"Path\" - path to csv-file">>
+                    },
+                    #{
+                        name => format,
+                        default => <<"csv">>,
+                        type => binary,
+                        help => <<"Type format for imported tracks">>
                     }
                 ],
                 handler => fun import_from_csv/1
@@ -77,13 +83,17 @@ export_to_csv(#{}) ->
         end,
     process_request(Req, ProcessResp).
 
-import_from_csv(#{csv := <<"stdin">>}) ->
+import_from_csv(Arg = #{csv := <<"stdin">>}) ->
     Req =
         fun() ->
             CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
             either:right(
                 request:encode(
-                    #{request => <<"import_from_csv">>, csv => CSV},
+                    #{
+                        request => <<"import_from_csv">>,
+                        csv => CSV,
+                        format => maps:get(format, Arg)
+                    },
                     oneline
                 )
             )
@@ -96,7 +106,7 @@ import_from_csv(#{csv := <<"stdin">>}) ->
                 nomatch
         end,
     process_request(Req, ProcessResp);
-import_from_csv(#{csv := Path}) ->
+import_from_csv(Arg = #{csv := Path}) ->
     Req =
         fun() ->
             case file:read_file(Path) of
@@ -104,7 +114,11 @@ import_from_csv(#{csv := Path}) ->
                     CSV = unicode:characters_to_binary(Binary),
                     either:right(
                         request:encode(
-                            #{request => <<"import_from_csv">>, csv => CSV},
+                            #{
+                                request => <<"import_from_csv">>,
+                                csv => CSV,
+                                format => maps:get(format, Arg)
+                            },
                             oneline
                         )
                     );
