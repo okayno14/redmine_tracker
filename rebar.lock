@@ -1,6 +1,6 @@
 [{<<"erl_utils">>,
   {git,"https://github.com/okayno14/erl_utils.git",
-       {ref,"698e2077345e3a0b2ae44cb62b1f2c4fb5ef3c89"}},
+       {ref,"9ef38bdf61c10152eb04117907df994db4ba11db"}},
   0},
  {<<"meck">>,
   {git,"https://github.com/eproxus/meck.git",
