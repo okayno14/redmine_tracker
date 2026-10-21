@@ -177,122 +177,84 @@ end_track_last() ->
 -spec export_to_csv(Format :: unicode:unicode_binary()) ->
     db:transaction_ret(CSV :: unicode:unicode_binary()).
 %%--------------------------------------------------------------------
+%% TODO remove csv from method names. Cause it can be any format: json, whatever
 export_to_csv(Format) when is_binary(Format) ->
-    db:transaction(fun() -> export_to_csv_(Format) end).
+    db:transaction(
+        fun() ->
+            compose:compose(
+                [
+                    fun db:either_throw/1,
+                    fun export_to_csv_process_ret/1,
+                    fun maps_to_csv_/1,
+                    fun tracks_to_maps/1,
+                    fun tracks_all/1,
+                    fun(X) -> track_translator(X, Format) end
+                ],
+                either:right(
+                    #{
+                        track_translator => undefined,
+                        csv => [],
+                        timestamp => {{0, 0, 0}, {0, 0, 0}}
+                    }
+                )
+            )
+         end
+     ).
 
-export_to_csv_(Format) ->
-    compose:compose(
-        [
-            fun db:either_throw/1,
-            fun(X) ->
-                either:cata(
-                    X,
-                    fun({error, unknown_format}) ->
-                        Msg =
-                            unicode:characters_to_binary([
-                                <<"No translator for ">>,
-                                <<"\"">>, Format, <<"\"">>, <<" ">>,
-                                <<"format.">>
-                            ]),
-                        {error, Msg}
-                    end,
-                    fun(Y) -> Y end
-                )
-            end,
-            fun(X) ->
-                either:map(
-                    X,
-                    fun(Args) ->
-                        #{csv := Tracks} = Args,
-                        unicode:characters_to_binary(Tracks)
-                    end
-                )
-            end,
-            fun(X) ->
-                either:map(
-                    X,
-                    fun
-                         (Args = #{csv := []}) ->
-                             Args;
-                         (Args) ->
-                             #{csv := Tracks} = Args,
-                             [_ | T] = lists:reverse(Tracks),
-                             Args#{csv => T}
-                     end
-                )
-            end,
-            fun(X) ->
-                either:map(
-                    X,
-                    fun tracks_to_csv/1
-                )
-            end,
-            fun(X) ->
-                either:map(
-                    X,
-                    fun
-                        (Args = #{csv := []}) -> Args;
-                        (Args = #{csv := Tracks}) -> Args#{timestamp => track:ts_begin(erlang:hd(Tracks))}
-                    end
-                )
-            end,
-            fun(X) ->
-                either:map(
-                    X,
-                    fun(Args) ->
-                        Args#{csv => tracks:all_sorted_by_timestamp_start()}
-                    end
-                )
-            end,
-            fun(X) ->
-                either:map(
-                    X,
-                    fun(TrackTranslator) ->
-                        #{
-                            to_csv => fun(Track) -> track_translator:export(TrackTranslator, [track:to_map(Track)]) end,
-                            csv => [],
-                            timestamp => {{0, 0, 0}, {0, 0, 0}}
-                        }
-                    end
-                )
-            end
-        ],
-        track_translator_strategy:make(Format)
+export_to_csv_process_ret(X) ->
+    either:cata(
+        X,
+        fun({error, {unknown_format, Format}}) ->
+            Msg =
+                unicode:characters_to_binary([
+                    <<"No translator for ">>,
+                    <<"\"">>, Format, <<"\"">>, <<" ">>,
+                    <<"format.">>
+                ]),
+            {error, Msg}
+        end,
+        fun(#{csv := CSV}) ->
+            CSV
+        end
     ).
 
-tracks_to_csv(X = #{csv := []}) ->
-    X;
-tracks_to_csv(X) ->
-    #{
-        csv := Tracks,
-        to_csv := ToCsv
-    } = X,
-    lists:foldl(
-        fun(
-            Track,
-            #{csv := CSV, timestamp := TS}
-        ) when is_list(CSV) ->
-            compose:if_else(
-                fun(X2) ->
-                    track:is_timestamps_at_one_date(X2, TS)
-                end,
-                fun(X2) ->
-                    #{
-                        csv => [ToCsv(X2), ~"\n" | CSV],
-                        timestamp => track:ts_begin(X2)
-                    }
-                end,
-                fun(X2) ->
-                    #{
-                        csv => [ToCsv(X2), ~"\n", ~"\n" | CSV],
-                        timestamp => track:ts_begin(X2)
-                    }
-                end,
-                Track
+maps_to_csv_(X) ->
+    either:map(
+        X,
+        fun(Args) ->
+            #{csv := Tracks, track_translator := TrackTranslator} = Args,
+            Args#{csv => track_translator:export(TrackTranslator, Tracks)}
+        end
+    ).
+
+tracks_to_maps(X) ->
+    either:map(
+        X,
+        fun(Args) ->
+            #{csv := Tracks} = Args,
+            Args#{csv => [track:to_map(Track) || Track <- Tracks]}
+        end
+    ).
+
+tracks_all(X) ->
+    either:map(
+        X,
+        fun(Args) ->
+            Args#{csv => tracks:all_sorted_by_timestamp_start()}
+        end
+    ).
+
+track_translator(X, Format) ->
+    either:flatmap(
+        X,
+        fun(Args) ->
+            either:cata(
+                track_translator_strategy:make(Format),
+                fun({error, unknown_format}) -> {error, {unknown_format, Format}} end,
+                %% TODO переименовать
+                fun(TrackTranslator) -> Args#{track_translator => TrackTranslator} end
             )
-        end,
-        X#{csv => []},
-        Tracks
+        end
     ).
 %%--------------------------------------------------------------------
 
