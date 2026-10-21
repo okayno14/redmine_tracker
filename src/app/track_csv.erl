@@ -11,8 +11,42 @@
 -spec export([track:external_map()]) ->
     CSV :: unicode:unicode_binary().
 %%--------------------------------------------------------------------
+export([]) ->
+    ~"";
 export(L) ->
-    lists:map(fun export_/1, L).
+    H = #{} = erlang:hd(L),
+    Args2 =
+        lists:foldl(
+            fun(Map = #{}, #{csv := CSV, timestamp := TS}) when is_list(CSV) ->
+                Sep =
+                    compose:if_else(
+                        fun(Map2) ->
+                            datetime:at_one_date(
+                                maps:get(timestamp_begin, Map2),
+                                TS
+                            )
+                        end,
+                        fun(_) -> [~"\n"] end,
+                        fun(_) -> [~"\n", ~"\n"] end,
+                        Map
+                    ),
+                #{
+                    csv => [export_(Map), Sep | CSV],
+                    timestamp => maps:get(timestamp_begin, Map)
+                }
+            end,
+            #{
+                csv => [],
+                timestamp => maps:get(timestamp_begin, H)
+            },
+            L
+        ),
+    #{csv := L2 = [_ | _]} = Args2,
+    [_ | T] = lists:reverse(L2),
+    % eqwalizer:ignore
+    Ret = unicode:characters_to_binary(T),
+    true = is_binary(Ret),
+    Ret.
 
 export_(Map) ->
     #{
