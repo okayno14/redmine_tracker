@@ -269,81 +269,86 @@ track_translator(X, Format) ->
     ).
 %%--------------------------------------------------------------------
 import_from_csv(CSV, Format) when is_binary(CSV), is_binary(Format) ->
-    F = fun() ->
-        compose:compose(
-            [
-                fun db:either_throw/1,
-                fun(X) ->
-                    either:map(
-                        X,
-                        fun(Tracks) ->
-                            LastIDImported = lists:max([track:id(Track) || Track <- Tracks]),
-                            LastID = track:last_id(),
-                            compose:if_else(
-                                fun(X2) -> X2 > 0 end,
-                                fun(X2) -> track:inc_id(X2), ok end,
-                                fun(_X2) -> ok end,
-                                LastIDImported - LastID
-                            )
-                        end
-                    )
-                end,
-                fun(X) ->
-                    either:map(
-                        X,
-                        fun(Tracks) ->
-                            lists:foreach(fun track:set/1, Tracks),
-                            Tracks
-                        end
-                    )
-                end,
-                fun(X) ->
-                    either:flatmap(
-                        X,
-                        fun(_Tracks) ->
-                            tracks:remove_all(),
-                            X
-                        end
-                    )
-                end,
-                fun(X) ->
-                    either:map(
-                        X,
-                        fun(L) ->
-                            lists:map(fun track:from_map/1, L)
-                        end
-                    )
-                end,
-                fun(X) ->
-                    either:flatmap(
-                        X,
-                        fun({TrackTranslator, CSV2}) ->
-                            track_translator:import(TrackTranslator, CSV2)
-                        end
-                    )
-                end,
-                fun(X) ->
-                    either:cata(
-                        track_translator_strategy:make(Format),
-                        fun({error, unknown_format}) ->
-                            Msg =
-                                unicode:characters_to_binary([
-                                    <<"No translator for ">>,
-                                    <<"\"">>, Format, <<"\"">>, <<" ">>,
-                                    <<"format.">>
-                                ]),
-                            {error, Msg}
-                        end,
-                        fun(TrackTranslator) ->
-                            {TrackTranslator, CSV}
-                        end
-                    )
-                end
-            ],
-            CSV
-        )
-    end,
-    db:transaction(F).
+    db:transaction(
+        fun() ->
+            compose:compose(
+                [
+                    %% TODO добавить вызов track:validate, т.к. мало ли что там юзер прислал.
+                    %% TrackTranslator возвращает только ошибки конвертации формата, он не проверяет сам объект Track.
+                    %% TODO добавить перегенерацию обратного csv из export (чтобы было разделение по датам)
+                    fun db:either_throw/1,
+                    fun import_from_csv_process_ret/1,
+                    fun maybe_inc_id/1,
+                    fun tracks_set/1,
+                    fun remove_all/1,
+                    fun tracks_from_map/1,
+                    fun import_tracks/1,
+                    fun(X) -> import_from_csv_track_translator(X, Format) end
+                ],
+                either:right(CSV)
+            )
+        end
+    ).
+
+%% TODO надо удалить, т.к. эта логика делается на стороне контроллера
+import_from_csv_process_ret(X) ->
+    either:leftmap(
+        X,
+        fun({error, {unknown_format, Format}}) ->
+            %% TODO вынести в отдельную функцию
+            Msg =
+                unicode:characters_to_binary([
+                    <<"No translator for ">>,
+                    <<"\"">>, Format, <<"\"">>, <<" ">>,
+                    <<"format.">>
+                ]),
+            {error, Msg}
+        end
+    ).
+
+maybe_inc_id(X) ->
+    either:map(
+        X,
+        fun(Tracks) ->
+            LastIDImported = lists:max([track:id(Track) || Track <- Tracks]),
+            LastID = track:last_id(),
+            compose:if_else(
+                fun(X2) -> X2 > 0 end,
+                fun(X2) -> track:inc_id(X2), ok end,
+                fun(_X2) -> ok end,
+                LastIDImported - LastID
+            )
+        end
+    ).
+
+tracks_set(X) ->
+    either:map(X, fun(Tracks) -> lists:foreach(fun track:set/1, Tracks), Tracks end).
+
+remove_all(X) ->
+    either:flatmap(X, fun(_Tracks) -> tracks:remove_all(), X end).
+
+tracks_from_map(X) ->
+    either:map(X, fun(L) -> lists:map(fun track:from_map/1, L) end).
+
+import_tracks(X) ->
+    either:flatmap(
+        X,
+        fun({TrackTranslator, CSV}) ->
+            track_translator:import(TrackTranslator, CSV)
+        end
+    ).
+
+import_from_csv_track_translator(X, Format) ->
+    either:flatmap(
+        X,
+        fun(CSV) ->
+            either:cata(
+                track_translator_strategy:make(Format),
+                fun({error, unknown_format}) -> {error, {unknown_format, Format}} end,
+                fun(TrackTranslator) -> {TrackTranslator, CSV} end
+            )
+        end
+    ).
 %%--------------------------------------------------------------------
 
 -spec push_to_redmine() ->
