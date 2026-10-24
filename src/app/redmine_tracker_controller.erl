@@ -6,11 +6,11 @@
 
 -export([route/1]).
 
-route(Arg = #{request := <<"export_to_csv">>}) ->
+route(Arg = #{request := <<"export">>}) ->
     #{<<"format">> := Format} = Arg,
     {
         fun() ->
-            track_composed:export_to_csv(Format)
+            track_composed:export(Format)
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of
@@ -19,11 +19,11 @@ route(Arg = #{request := <<"export_to_csv">>}) ->
             end
         end
     };
-route(Arg = #{request := <<"import_from_csv">>}) ->
+route(Arg = #{request := <<"import">>}) ->
     #{<<"csv">> := CSV, <<"format">> := Format} = Arg,
     {
         fun() ->
-            track_composed:import_from_csv(CSV, Format)
+            track_composed:import(CSV, Format)
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of

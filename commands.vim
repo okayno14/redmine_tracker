@@ -1,13 +1,13 @@
 function ExporToCsv()
     %d
-    0r! redmine_tracker_ctl export_to_csv
+    0r! redmine_tracker_ctl export
     $d
     " move to begin of buffer
     0
 endfunction
 
 function ImportFromCsv()
-    let ret = systemlist("redmine_tracker_ctl import_from_csv", getline(1, line('$')))
+    let ret = systemlist("redmine_tracker_ctl import", getline(1, line('$')))
     %d
     call setline(1, ret)
 endfunction

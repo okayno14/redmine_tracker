@@ -7,9 +7,9 @@
     %% если последний трекинг незавершённый, то завершаем его
     end_track_last/0,
     %% экспортировать всю базу в csv
-    export_to_csv/1,
+    export/1,
     %% переписать всю базу содержимым csv
-    import_from_csv/2,
+    import/2,
     %% очистить всю базу и отправить в redmine_api
     push_to_redmine/0
 ]).
@@ -174,17 +174,17 @@ end_track_last() ->
 
 %%--------------------------------------------------------------------
 %% TODO надо добавить сортировку по id
--spec export_to_csv(Format :: unicode:unicode_binary()) ->
+-spec export(Format :: unicode:unicode_binary()) ->
     db:transaction_ret(CSV :: unicode:unicode_binary()).
 %%--------------------------------------------------------------------
 %% TODO remove csv from method names. Cause it can be any format: json, whatever
-export_to_csv(Format) when is_binary(Format) ->
+export(Format) when is_binary(Format) ->
     db:transaction(
         fun() ->
             compose:compose(
                 [
                     fun db:either_throw/1,
-                    fun export_to_csv_process_ret/1,
+                    fun export_process_ret/1,
                     fun maps_to_csv_/1,
                     fun tracks_to_maps/1,
                     fun tracks_all/1,
@@ -201,7 +201,7 @@ export_to_csv(Format) when is_binary(Format) ->
          end
      ).
 
-export_to_csv_process_ret(X) ->
+export_process_ret(X) ->
     either:cata(
         X,
         fun({error, {unknown_format, Format}}) ->
@@ -259,7 +259,7 @@ track_translator(X, Format) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec import_from_csv(
+-spec import(
     CSV :: unicode:unicode_binary(), Format :: unicode:unicode_binary()
 ) ->
     db:transaction_ret(
@@ -268,7 +268,7 @@ track_translator(X, Format) ->
         ok
     ).
 %%--------------------------------------------------------------------
-import_from_csv(CSV, Format) when is_binary(CSV), is_binary(Format) ->
+import(CSV, Format) when is_binary(CSV), is_binary(Format) ->
     db:transaction(
         fun() ->
             compose:compose(

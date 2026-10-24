@@ -11,7 +11,7 @@ cli() ->
     #{
         arguments => [],
         commands => #{
-            "export_to_csv" => #{
+            "export" => #{
                 arguments => [
                     #{
                         name => format,
@@ -20,9 +20,9 @@ cli() ->
                         help => <<"Type format for exported tracks">>
                     }
                 ],
-                handler => fun export_to_csv/1
+                handler => fun export/1
             },
-            "import_from_csv" => #{
+            "import" => #{
                 arguments => [
                     #{
                         name => csv,
@@ -37,7 +37,7 @@ cli() ->
                         help => <<"Type format for imported tracks">>
                     }
                 ],
-                handler => fun import_from_csv/1
+                handler => fun import/1
             },
             "begin_track" => #{
                 arguments => [
@@ -75,13 +75,13 @@ cli() ->
         }
     }.
 
-export_to_csv(Arg = #{}) ->
+export(Arg = #{}) ->
     Req =
         fun() ->
             either:right(
                 request:encode(
                     #{
-                        request => <<"export_to_csv">>,
+                        request => <<"export">>,
                         format => maps:get(format, Arg)
                     },
                     oneline
@@ -98,14 +98,14 @@ export_to_csv(Arg = #{}) ->
         end,
     process_request(Req, ProcessResp).
 
-import_from_csv(Arg = #{csv := <<"stdin">>}) ->
+import(Arg = #{csv := <<"stdin">>}) ->
     Req =
         fun() ->
             CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
             either:right(
                 request:encode(
                     #{
-                        request => <<"import_from_csv">>,
+                        request => <<"import">>,
                         csv => CSV,
                         format => maps:get(format, Arg)
                     },
@@ -121,7 +121,7 @@ import_from_csv(Arg = #{csv := <<"stdin">>}) ->
                 nomatch
         end,
     process_request(Req, ProcessResp);
-import_from_csv(Arg = #{csv := Path}) ->
+import(Arg = #{csv := Path}) ->
     Req =
         fun() ->
             case file:read_file(Path) of
@@ -130,7 +130,7 @@ import_from_csv(Arg = #{csv := Path}) ->
                     either:right(
                         request:encode(
                             #{
-                                request => <<"import_from_csv">>,
+                                request => <<"import">>,
                                 csv => CSV,
                                 format => maps:get(format, Arg)
                             },
