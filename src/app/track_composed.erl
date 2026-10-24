@@ -9,7 +9,7 @@
     %% экспортировать всю базу в csv
     export/1,
     %% переписать всю базу содержимым csv
-    import_from_csv/2,
+    import/2,
     %% очистить всю базу и отправить в redmine_api
     push_to_redmine/0
 ]).
@@ -259,7 +259,7 @@ track_translator(X, Format) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec import_from_csv(
+-spec import(
     CSV :: unicode:unicode_binary(), Format :: unicode:unicode_binary()
 ) ->
     db:transaction_ret(
@@ -268,7 +268,7 @@ track_translator(X, Format) ->
         ok
     ).
 %%--------------------------------------------------------------------
-import_from_csv(CSV, Format) when is_binary(CSV), is_binary(Format) ->
+import(CSV, Format) when is_binary(CSV), is_binary(Format) ->
     db:transaction(
         fun() ->
             compose:compose(
