@@ -173,7 +173,6 @@ end_track_last() ->
     db:transaction(F).
 
 %%--------------------------------------------------------------------
-%% TODO надо добавить сортировку по id
 -spec export(Format :: unicode:unicode_binary()) ->
     db:transaction_ret(
         {error, {unknown_format, Format :: unicode:unicode_binary()}},
@@ -249,19 +248,7 @@ export_track_translator(X, Format) ->
 ) ->
     db:transaction_ret(
         {error, {unknown_format, Format :: unicode:unicode_binary()}}
-        | {error, {import, bad_csv}}
-        | {
-            error,
-            {
-                import,
-                {
-                    bad_csv,
-                    %% TODO track_csv:from_csv_all_err()
-                    Reason :: track_csv:from_csv_err(),
-                    Line :: unicode:unicode_binary()
-                }
-            }
-        }
+        | {error, {import, Msg :: unicode:unicode_binary()}}
         | {error, {invalid, {TrackID :: pos_integer(), track:validate_err()}}},
         ok
     ).
@@ -338,10 +325,7 @@ import_tracks(X) ->
         fun({TrackTranslator, Bin}) ->
             either:leftmap(
                 track_translator:import(TrackTranslator, Bin),
-                fun
-                    ({error, bad_csv}) -> {error, {import, bad_csv}};
-                    ({error, {bad_csv, Line}, Reason}) -> {error, {import, {bad_csv, Reason, Line}}}
-                end
+                fun({error, Msg}) -> {error, {import, Msg}} end
             )
         end
     ).
