@@ -43,7 +43,14 @@ route(Arg = #{request := <<"import">>}) ->
                         import_error,
                         <<"unknown csv-error">>
                     );
-                    response:error_response(bad_csv, <<"unknown csv-error">>);
+                {false, {throw, {error, {unknown_format, Format}}}} ->
+                    response:error_response(
+                        unknown_format,
+                        %% TODO вынести в отдельную функцию
+                        unicode:characters_to_binary([
+                            ~"No translator for ", ~"\"", Format, ~"\"", ~" ", ~"format."
+                        ])
+                    );
                 _V ->
                     nomatch
             end
