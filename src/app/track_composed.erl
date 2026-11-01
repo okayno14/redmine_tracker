@@ -263,7 +263,10 @@ track_translator(X, Format) ->
     CSV :: unicode:unicode_binary(), Format :: unicode:unicode_binary()
 ) ->
     db:transaction_ret(
-        tracks:from_csv_all_err()
+        track_csv:from_csv_all_err(),
+        {error, {import, bad_csv}}
+        %% TODO track_csv:from_csv_all_err()
+        | {error, {import, {bad_csv, Reason :: track_csv:from_csv_err(), Line :: unicode:unicode_binary()}}}
         | {error, Msg :: unicode:unicode_binary()},
         ok
     ).
@@ -292,19 +295,17 @@ import(CSV, Format) when is_binary(CSV), is_binary(Format) ->
 
 %% TODO надо удалить, т.к. эта логика делается на стороне контроллера
 import_from_csv_process_ret(X) ->
-    either:leftmap(
-        X,
-        fun({error, {unknown_format, Format}}) ->
-            %% TODO вынести в отдельную функцию
-            Msg =
-                unicode:characters_to_binary([
-                    <<"No translator for ">>,
-                    <<"\"">>, Format, <<"\"">>, <<" ">>,
-                    <<"format.">>
-                ]),
-            {error, Msg}
-        end
-    ).
+    either:leftmap(X, fun import_from_csv_process_err/1).
+
+import_from_csv_process_err({error, {unknown_format, Format}}) ->
+    %% TODO вынести в отдельную функцию
+    Msg =
+        unicode:characters_to_binary([
+            ~"No translator for ", ~"\"", Format, ~"\"", ~" ", ~"format."
+        ]),
+    {error, Msg};
+import_from_csv_process_err(X) ->
+    X.
 
 maybe_inc_id(X) ->
     either:map(
@@ -333,8 +334,14 @@ tracks_from_map(X) ->
 import_tracks(X) ->
     either:flatmap(
         X,
-        fun({TrackTranslator, CSV}) ->
-            track_translator:import(TrackTranslator, CSV)
+        fun({TrackTranslator, Bin}) ->
+            either:leftmap(
+                track_translator:import(TrackTranslator, Bin),
+                fun
+                    ({error, bad_csv}) -> {error, {import, bad_csv}};
+                    ({error, {bad_csv, Line}, Reason}) -> {error, {import, {bad_csv, Reason, Line}}}
+                end
+            )
         end
     ).
 
