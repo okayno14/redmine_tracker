@@ -188,7 +188,7 @@ export(Format) when is_binary(Format) ->
                     fun maps_to_csv_/1,
                     fun tracks_to_maps/1,
                     fun tracks_all/1,
-                    fun(X) -> track_translator(X, Format) end
+                    fun(X) -> export_track_translator(X, Format) end
                 ],
                 either:right(
                     #{
@@ -244,7 +244,7 @@ tracks_all(X) ->
         end
     ).
 
-track_translator(X, Format) ->
+export_track_translator(X, Format) ->
     either:flatmap(
         X,
         fun(Args) ->
@@ -271,7 +271,7 @@ track_translator(X, Format) ->
         ok
     ).
 %%--------------------------------------------------------------------
-import(CSV, Format) when is_binary(CSV), is_binary(Format) ->
+import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
     db:transaction(
         fun() ->
             compose:compose(
@@ -286,9 +286,9 @@ import(CSV, Format) when is_binary(CSV), is_binary(Format) ->
                     fun remove_all/1,
                     fun tracks_from_map/1,
                     fun import_tracks/1,
-                    fun(X) -> import_from_csv_track_translator(X, Format) end
+                    fun(X) -> import_track_translator(X, Format) end
                 ],
-                either:right(CSV)
+                either:right(Bin)
             )
         end
     ).
@@ -345,7 +345,7 @@ import_tracks(X) ->
         end
     ).
 
-import_from_csv_track_translator(X, Format) ->
+import_track_translator(X, Format) ->
     either:flatmap(
         X,
         fun(CSV) ->
