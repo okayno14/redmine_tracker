@@ -175,16 +175,17 @@ end_track_last() ->
 %%--------------------------------------------------------------------
 %% TODO надо добавить сортировку по id
 -spec export(Format :: unicode:unicode_binary()) ->
-    db:transaction_ret(CSV :: unicode:unicode_binary()).
+    db:transaction_ret(
+        {error, {unknown_format, Format :: unicode:unicode_binary()}},
+        CSV :: unicode:unicode_binary()
+    ).
 %%--------------------------------------------------------------------
-%% TODO remove csv from method names. Cause it can be any format: json, whatever
 export(Format) when is_binary(Format) ->
     db:transaction(
         fun() ->
             compose:compose(
                 [
                     fun db:either_throw/1,
-                    fun export_process_ret/1,
                     fun maps_to_csv_/1,
                     fun tracks_to_maps/1,
                     fun tracks_all/1,
@@ -200,23 +201,6 @@ export(Format) when is_binary(Format) ->
             )
          end
      ).
-
-export_process_ret(X) ->
-    either:cata(
-        X,
-        fun({error, {unknown_format, Format}}) ->
-            Msg =
-                unicode:characters_to_binary([
-                    <<"No translator for ">>,
-                    <<"\"">>, Format, <<"\"">>, <<" ">>,
-                    <<"format.">>
-                ]),
-            {error, Msg}
-        end,
-        fun(#{csv := CSV}) ->
-            CSV
-        end
-    ).
 
 maps_to_csv_(X) ->
     either:map(
@@ -264,7 +248,8 @@ export_track_translator(X, Format) ->
     Format :: unicode:unicode_binary()
 ) ->
     db:transaction_ret(
-        {error, {import, bad_csv}}
+        {error, {unknown_format, Format :: unicode:unicode_binary()}}
+        | {error, {import, bad_csv}}
         | {
             error,
             {
