@@ -7,7 +7,13 @@
     import/1
 ]).
 
--export_type([from_csv_err/0]).
+-type from_csv_reason() ::
+    {state, Msg :: unicode:unicode_binary()}
+    | {timestamp_end, {bad_datetime, Msg :: unicode:unicode_binary()}}
+    | {timestamp_begin, {bad_datetime, Msg :: unicode:unicode_binary()}}
+    | {id, Msg :: unicode:unicode_binary()}
+    | {activity, not_found}
+    | {bad_csv, Msg :: unicode:unicode_binary()}.
 
 %%--------------------------------------------------------------------
 -spec export([track:external_map()]) ->
@@ -90,7 +96,6 @@ export_(Map) ->
 %% TODO перетащить тело функции из track сюда
 %% TODO перетащить тесты
 %%--------------------------------------------------------------------
-%% TODO сделать конвертацию ошибок в binary - человекочитаемой строчке + убрать клозы из контроллера
 import(Bin) ->
     either:leftmap(
         either:flatmap(
@@ -100,67 +105,36 @@ import(Bin) ->
         fun format_import_error/1
     ).
 
-
 -spec from_csv(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
     either:either(
-        from_csv_all_err(),
+        {error, from_csv_reason()},
         [track:track()]
     ).
 from_csv(CSV, Activities) ->
-    lists:foldl(
-        fun
-            (<<>>, Either) ->
-                either:map(Either, fun lists:reverse/1);
-            (Line, Either) when is_binary(Line) ->
-                either:flatmap(
-                    Either,
-                    fun
-                        (Acc) ->
-                            Ret = from_csv_(Line, Activities),
-                            case either:is_left(Ret) of
-                                true ->
-                                    either:left(
-                                        {error, {bad_csv, Line}, either:extract(Ret)}
-                                    );
-                                false ->
-                                    either:right([either:extract(Ret) | Acc])
-                            end
-                    end
-                )
-        end,
-        either:right([]),
-        string:split(CSV, <<"\n">>, all)
-    ).
-
--type from_csv_all_err() ::
-    {error, bad_csv}
-    | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()}.
-
--spec format_import_error(Err :: from_csv_all_err()) ->
-    {error, Reason :: unicode:unicode_binary()}.
-
-format_import_error({error, bad_csv}) ->
-    {error, ~"unknown csv-error"};
-format_import_error({error, {bad_csv, Line}, Err}) ->
-    {
-        error,
-        unicode:characters_to_binary([
-            io_lib:format("Error:~p\n", [Err]),
-            ~"csv-line: ", Line
-        ])
-    }.
-
--type from_csv_err() ::
-    {error, state, {error, Msg :: unicode:unicode_binary()}}
-    | {error, timestamp_end, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
-    | {error, timestamp_begin, {error, {bad_datetime, Msg :: unicode:unicode_binary()}}}
-    | {error, {id, Msg :: unicode:unicode_binary()}}
-    | {error, activity, {error, not_found}}
-    | {error, {bad_csv, Msg :: unicode:unicode_binary()}}.
+    X =
+        lists:foldl(
+            fun
+                (~"", Either) -> Either;
+                (Line, Either) when is_binary(Line) ->
+                    either:flatmap(
+                        Either,
+                        fun(Acc) ->
+                            either:cata(
+                                from_csv_(Line, Activities),
+                                fun({error, Reason}) -> {error, {Reason, Line}} end,
+                                fun(Map) -> [Map | Acc] end
+                            )
+                        end
+                    )
+            end,
+            either:right([]),
+            string:split(CSV, <<"\n">>, all)
+        ),
+    either:map(X, fun lists:reverse/1).
 
 -spec from_csv_(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
     either:either(
-        from_csv_err(),
+        from_csv_reason(),
         track:track()
     ).
 %% TODO отрефакторить: поделить на шаги, переименовать переменные
@@ -194,7 +168,7 @@ from_csv_(CSV, Activities) ->
                         ->
                             either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, erlang:binary_to_atom(StateBin)]);
                         ([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                            either:left({error, state, {error, <<"State must be \"finished\" or \"tracking\"">>}})
+                            either:left({error, {state, ~"State must be \"finished\" or \"tracking\""}})
                     end
                 )
             end,
@@ -203,11 +177,11 @@ from_csv_(CSV, Activities) ->
                     Either,
                     %% TODO переименовать с Bin на просто ID
                     fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        X = datetime:from_binary(TsEndBin),
-                        case either:is_left(X) of
-                            true -> either:left({error, timestamp_end, either:extract(X)});
-                            false -> either:right([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, either:extract(X), DescBin, StateBin])
-                        end
+                        either:cata(
+                            datetime:from_binary(TsEndBin),
+                            fun({error, Reason}) -> {error, {timestamp_end, Reason}} end,
+                            fun(TsEndBin2) -> [IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin2, DescBin, StateBin] end
+                        )
                     end
                 )
             end,
@@ -216,11 +190,11 @@ from_csv_(CSV, Activities) ->
                     Either,
                     %% TODO переименовать с Bin на просто ID
                     fun([IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
-                        X = datetime:from_binary(TsBeginBin),
-                        case either:is_left(X) of
-                            true -> either:left({error, timestamp_begin, either:extract(X)});
-                            false -> either:right([IDBin, ProjectID, TaskBin, Activity, either:extract(X), TsEndBin, DescBin, StateBin])
-                        end
+                        either:cata(
+                            datetime:from_binary(TsBeginBin),
+                            fun({error, Reason}) -> {error, {timestamp_begin, Reason}} end,
+                            fun(TsBeginBin2) -> [IDBin, ProjectID, TaskBin, Activity, TsBeginBin2, TsEndBin, DescBin, StateBin] end
+                        )
                     end
                 )
             end,
@@ -232,7 +206,7 @@ from_csv_(CSV, Activities) ->
                             either:right([erlang:binary_to_integer(IDBin), ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin])
                         catch
                             Class:Reason:StackTrace ->
-                                either:left({error, {id, <<"Id contains non-numeric symbols">>}})
+                                either:left({error, {id, ~"Id contains non-numeric symbols"}})
                         end
                     end
                 )
@@ -243,7 +217,7 @@ from_csv_(CSV, Activities) ->
                     fun([IDBin, ProjectID, TaskBin, ActivityDesc, TsBeginBin, TsEndBin, DescBin, StateBin]) ->
                         either:cata(
                             track:activity(ActivityDesc, Activities),
-                            fun(_) -> {error, activity, {error, not_found}} end,
+                            fun(_) -> {error, {activity, not_found}} end,
                             fun(Activity) -> [IDBin, ProjectID, TaskBin, Activity, TsBeginBin, TsEndBin, DescBin, StateBin] end
                         )
                     end
@@ -261,7 +235,7 @@ from_csv_(CSV, Activities) ->
                     Either,
                     fun
                         (X = [_, _, _, _, _, _, _, _]) -> either:right(X);
-                        (_) -> either:left({error, {bad_csv, <<"Failed to split csv-line">>}})
+                        (_) -> either:left({error, {bad_csv, ~"Failed to split csv-line"}})
                     end
                 )
             end,
@@ -274,5 +248,32 @@ from_csv_(CSV, Activities) ->
         ],
         either:right(CSV)
     ).
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+-spec format_import_error(Err :: from_csv_reason()) ->
+    {error, Reason :: unicode:unicode_binary()}.
+
+format_import_error({error, {Reason, Line}}) ->
+    {
+        error,
+        unicode:characters_to_binary([
+            ~"Error: ", format_from_csv_reason(Reason), ~"\n",
+            ~"csv-line: ", Line
+        ])
+    }.
+
+format_from_csv_reason({state, Msg}) ->
+    <<"state: ", Msg/binary>>;
+format_from_csv_reason({timestamp_end, {bad_datetime, Msg}}) ->
+    <<"timestamp_end: ", Msg/binary>>;
+format_from_csv_reason({timestamp_begin, {bad_datetime, Msg}}) ->
+    <<"timestamp_begin: ", Msg/binary>>;
+format_from_csv_reason({id, Msg}) ->
+    <<"id: ", Msg/binary>>;
+format_from_csv_reason({activity, not_found}) ->
+    ~"activity: not found";
+format_from_csv_reason({bad_csv, Msg}) ->
+    <<"bad csv: ", Msg/binary>>.
 %%--------------------------------------------------------------------
 
