@@ -7,6 +7,8 @@
     import/1
 ]).
 
+-export_type([from_csv_err/0]).
+
 %%--------------------------------------------------------------------
 -spec export([track:external_map()]) ->
     CSV :: unicode:unicode_binary().

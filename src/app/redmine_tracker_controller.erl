@@ -38,6 +38,7 @@ route(Arg = #{request := <<"import">>}) ->
                             io_lib:format("Bad csv-line: ~ts\nReason:~p", [Line, Error])
                         )
                     );
+                %% TODO надо как-то убрать упоминание bad_csv -> translator_error
                 {false, {throw, {error, {import, bad_csv}}}} ->
                     response:error_response(
                         import_error,
@@ -50,6 +51,21 @@ route(Arg = #{request := <<"import">>}) ->
                         unicode:characters_to_binary([
                             ~"No translator for ", ~"\"", Format, ~"\"", ~" ", ~"format."
                         ])
+                    );
+                {false, {throw, {error, {invalid, ErrorList}}}} ->
+                    ErrorList2 =
+                        lists:map(
+                            fun({TrackID, ValidateErr}) ->
+                                [
+                                    ~"Track:", ~" ", erlang:integer_to_binary(TrackID), ~"\n",
+                                    io_lib:format("~p\n", [ValidateErr])
+                                ]
+                            end,
+                            ErrorList
+                        ),
+                    response:error_response(
+                        invalid,
+                        unicode:characters_to_binary([~"Validation error:\n" | ErrorList2])
                     );
                 _V ->
                     nomatch

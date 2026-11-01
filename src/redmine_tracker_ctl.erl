@@ -25,6 +25,7 @@ cli() ->
             "import" => #{
                 arguments => [
                     #{
+                        %% TODO убрать упоминание csv
                         name => csv,
                         default => <<"stdin">>,
                         type => binary,

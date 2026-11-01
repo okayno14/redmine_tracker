@@ -260,13 +260,24 @@ export_track_translator(X, Format) ->
 
 %%--------------------------------------------------------------------
 -spec import(
-    CSV :: unicode:unicode_binary(), Format :: unicode:unicode_binary()
+    CSV :: unicode:unicode_binary(),
+    Format :: unicode:unicode_binary()
 ) ->
     db:transaction_ret(
-        track_csv:from_csv_all_err(),
         {error, {import, bad_csv}}
-        %% TODO track_csv:from_csv_all_err()
-        | {error, {import, {bad_csv, Reason :: track_csv:from_csv_err(), Line :: unicode:unicode_binary()}}}
+        | {
+            error,
+            {
+                import,
+                {
+                    bad_csv,
+                    %% TODO track_csv:from_csv_all_err()
+                    Reason :: track_csv:from_csv_err(),
+                    Line :: unicode:unicode_binary()
+                }
+            }
+        }
+        | {error, {invalid, {TrackID :: pos_integer(), track:validate_err()}}},
         ok
     ).
 %%--------------------------------------------------------------------
@@ -275,13 +286,12 @@ import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
         fun() ->
             compose:compose(
                 [
-                    %% TODO добавить вызов track:validate, т.к. мало ли что там юзер прислал.
-                    %% TrackTranslator возвращает только ошибки конвертации формата, он не проверяет сам объект Track.
                     %% TODO добавить перегенерацию обратного csv из export (чтобы было разделение по датам)
                     fun db:either_throw/1,
                     fun maybe_inc_id/1,
                     fun tracks_set/1,
                     fun remove_all/1,
+                    fun validate_tracks/1,
                     fun tracks_from_map/1,
                     fun import_tracks/1,
                     fun(X) -> import_track_translator(X, Format) end
@@ -311,6 +321,28 @@ tracks_set(X) ->
 
 remove_all(X) ->
     either:flatmap(X, fun(_Tracks) -> tracks:remove_all(), X end).
+
+validate_tracks(X) ->
+    either:flatmap(
+        X,
+        fun(L) ->
+            ErrorList = [{track:id(Track), track:validate(Track)} || Track <- L],
+            ErrorList2 =
+                lists:filter(
+                    fun({TrackID, ValidateErr}) -> ValidateErr =/= [] end,
+                    ErrorList
+                ),
+            compose:if_else(
+                fun
+                    ([]) -> true;
+                    ([_ | _]) -> false
+                end,
+                fun(_) -> either:right(L) end,
+                fun(_) -> either:left({error, {invalid, ErrorList2}}) end,
+                ErrorList2
+            )
+        end
+    ).
 
 tracks_from_map(X) ->
     either:map(X, fun(L) -> lists:map(fun track:from_map/1, L) end).
