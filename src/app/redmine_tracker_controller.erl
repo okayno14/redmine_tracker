@@ -15,6 +15,14 @@ route(Arg = #{request := <<"export">>}) ->
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of
                 {true, CSV} -> response:ok_response(CSV);
+                {false, {throw, {error, {unknown_format, Format}}}} ->
+                    response:error_response(
+                        unknown_format,
+                        %% TODO вынести в отдельную функцию
+                        unicode:characters_to_binary([
+                            ~"No translator for ", ~"\"", Format, ~"\"", ~" ", ~"format."
+                        ])
+                    );
                 _ -> nomatch
             end
         end
