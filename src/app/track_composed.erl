@@ -267,7 +267,6 @@ export_track_translator(X, Format) ->
         {error, {import, bad_csv}}
         %% TODO track_csv:from_csv_all_err()
         | {error, {import, {bad_csv, Reason :: track_csv:from_csv_err(), Line :: unicode:unicode_binary()}}}
-        | {error, Msg :: unicode:unicode_binary()},
         ok
     ).
 %%--------------------------------------------------------------------
@@ -280,7 +279,6 @@ import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
                     %% TrackTranslator возвращает только ошибки конвертации формата, он не проверяет сам объект Track.
                     %% TODO добавить перегенерацию обратного csv из export (чтобы было разделение по датам)
                     fun db:either_throw/1,
-                    fun import_from_csv_process_ret/1,
                     fun maybe_inc_id/1,
                     fun tracks_set/1,
                     fun remove_all/1,
@@ -292,20 +290,6 @@ import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
             )
         end
     ).
-
-%% TODO надо удалить, т.к. эта логика делается на стороне контроллера
-import_from_csv_process_ret(X) ->
-    either:leftmap(X, fun import_from_csv_process_err/1).
-
-import_from_csv_process_err({error, {unknown_format, Format}}) ->
-    %% TODO вынести в отдельную функцию
-    Msg =
-        unicode:characters_to_binary([
-            ~"No translator for ", ~"\"", Format, ~"\"", ~" ", ~"format."
-        ]),
-    {error, Msg};
-import_from_csv_process_err(X) ->
-    X.
 
 maybe_inc_id(X) ->
     either:map(
