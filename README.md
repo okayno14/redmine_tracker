@@ -111,6 +111,12 @@ Base Workflow:
 * `redmine_tracker_ctl end_track_last` - redmine_tracker commits final endpoint for task. Finalize a created **track**;
 * `redmine_tracker_ctl push_to_redmine` - redmine_tracker pushes all **tracks** to redmine
 
+If need to edit something:
+
+* `redmine_tracker_ctl export` - exports to stdout all tracks
+* some editing (vim, another editor)
+* `redmine_tracker_ctl import` - imports from stdin/stdout all edited tracks
+
 ```sh
 # Prints general help-message
 redmine_tracker_ctl --help
