@@ -112,6 +112,10 @@ Base Workflow:
 * `redmine_tracker_ctl push_to_redmine` - redmine_tracker pushes all **tracks** to redmine
 
 ```sh
+# Prints general help-message
 redmine_tracker_ctl --help
+
+# Prints help for specific subcommand
+redmine_tracker_ctl <subcommand> --help
 ```
 
