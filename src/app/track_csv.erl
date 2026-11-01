@@ -93,18 +93,25 @@ export_(Map) ->
         [track:external_map()]
     ).
 %% TODO добавить в аргумент activities
-%% TODO перетащить тело функции из track сюда
 %% TODO перетащить тесты
 %%--------------------------------------------------------------------
 import(Bin) ->
-    either:leftmap(
-        either:flatmap(
-            track:activities(),
-            fun(Activities) -> from_csv(Bin, Activities) end
-        ),
-        fun format_import_error/1
+    compose:compose(
+        [
+            fun import_format_err/1,
+            fun(X) -> import_from_csv(X, Bin) end
+        ],
+        track:activities()
     ).
 
+import_format_err(X) ->
+    either:leftmap(X, fun format_import_error/1).
+
+import_from_csv(X, Bin) ->
+    either:flatmap(X, fun(Activities) -> from_csv(Bin, Activities) end).
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
 -spec from_csv(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
     either:either(
         {error, from_csv_reason()},
