@@ -96,7 +96,7 @@ import(Bin) ->
 
 -type from_csv_all_err() ::
     {error, bad_csv}
-    | {error, {bad_csv, Line :: unicode:unicode_binary()}, track:from_csv_err()}.
+    | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()}.
 
 -spec from_csv(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
     either:either(
@@ -117,15 +117,10 @@ from_csv(CSV, Activities) ->
                             case either:is_left(Ret) of
                                 true ->
                                     either:left(
-                                        {error,
-                                            {bad_csv, Line},
-                                            either:extract(Ret)
-                                        }
+                                        {error, {bad_csv, Line}, either:extract(Ret)}
                                     );
                                 false ->
-                                    either:right(
-                                        [either:extract(Ret) | Acc]
-                                    )
+                                    either:right([either:extract(Ret) | Acc])
                             end
                     end
                 )
