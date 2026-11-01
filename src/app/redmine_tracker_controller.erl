@@ -39,19 +39,8 @@ route(Arg = #{request := <<"import">>}) ->
                     response:ok_response(CSV);
                 {false, {throw, {error, Msg}}} when is_binary(Msg) ->
                     response:error_response(bad_import, Msg);
-                {false, {throw, {error, {import, {bad_csv, Error, Line}}}}} ->
-                    response:error_response(
-                        import_error,
-                        unicode:characters_to_binary(
-                            io_lib:format("Bad csv-line: ~ts\nReason:~p", [Line, Error])
-                        )
-                    );
-                %% TODO надо как-то убрать упоминание bad_csv -> translator_error
-                {false, {throw, {error, {import, bad_csv}}}} ->
-                    response:error_response(
-                        import_error,
-                        <<"unknown csv-error">>
-                    );
+                {false, {throw, {error, {import, Msg}}}} ->
+                    response:error_response(import_error, Msg);
                 {false, {throw, {error, {unknown_format, Format}}}} ->
                     response:error_response(
                         unknown_format,

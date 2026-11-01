@@ -88,17 +88,18 @@ export_(Map) ->
     ).
 %% TODO добавить в аргумент activities
 %% TODO перетащить тело функции из track сюда
-%% TODO сделать конвертацию ошибок в binary - человекочитаемой строчке
 %% TODO перетащить тесты
 %%--------------------------------------------------------------------
+%% TODO сделать конвертацию ошибок в binary - человекочитаемой строчке + убрать клозы из контроллера
 import(Bin) ->
-    either:flatmap(track:activities(), fun(Activities) ->
-        from_csv(Bin, Activities)
-    end).
+    either:leftmap(
+        either:flatmap(
+            track:activities(),
+            fun(Activities) -> from_csv(Bin, Activities) end
+        ),
+        fun format_import_error/1
+    ).
 
--type from_csv_all_err() ::
-    {error, bad_csv}
-    | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()}.
 
 -spec from_csv(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
     either:either(
@@ -130,6 +131,24 @@ from_csv(CSV, Activities) ->
         either:right([]),
         string:split(CSV, <<"\n">>, all)
     ).
+
+-type from_csv_all_err() ::
+    {error, bad_csv}
+    | {error, {bad_csv, Line :: unicode:unicode_binary()}, from_csv_err()}.
+
+-spec format_import_error(Err :: from_csv_all_err()) ->
+    {error, Reason :: unicode:unicode_binary()}.
+
+format_import_error({error, bad_csv}) ->
+    {error, ~"unknown csv-error"};
+format_import_error({error, {bad_csv, Line}, Err}) ->
+    {
+        error,
+        unicode:characters_to_binary([
+            io_lib:format("Error:~p\n", [Err]),
+            ~"csv-line: ", Line
+        ])
+    }.
 
 -type from_csv_err() ::
     {error, state, {error, Msg :: unicode:unicode_binary()}}
