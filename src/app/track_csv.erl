@@ -92,7 +92,6 @@ export_(Map) ->
         {error, Reason :: unicode:unicode_binary()},
         [track:external_map()]
     ).
-%% TODO перетащить тесты
 %%--------------------------------------------------------------------
 import(Bin, Activities) ->
     compose:compose(
@@ -285,3 +284,67 @@ format_from_csv_reason({bad_csv, Msg}) ->
     <<"bad csv: ", Msg/binary>>.
 %%--------------------------------------------------------------------
 
+%%%===================================================================
+%%% Tests
+%%%===================================================================
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+to_csv_test() ->
+    ?assertEqual(
+        <<"1,\"Redmine Tracker\",\"228\",Code,\"2026-02-25 22:42:00\",\"2026-02-25 22:50:00\",\"tested csv-export\",tracking;">>,
+        export([
+            track:to_map(
+                track:make(
+                    1,
+                    <<"Redmine Tracker">>,
+                    {1, <<"Code">>},
+                    <<"228">>,
+                    {{2026, 02, 25}, {22, 42, 00}},
+                    {{2026, 02, 25}, {22, 50, 00}},
+                    <<"tested csv-export">>
+                )
+            )
+        ])
+    ).
+
+from_csv_test() ->
+    Activities =
+        #{
+            <<"Design">> => 8,
+            <<"Code">> => 9,
+            <<"Code Review">> => 90,
+            <<"Analysis">> => 96,
+            <<"Discuss">> => 10,
+            <<"Test">> => 11,
+            <<"Management">> => 12,
+            <<"Documentation">> => 13,
+            <<"Support">> => 14
+        },
+    Track =
+        track:new(
+            1,
+            <<"Redmine Tracker">>,
+            {9, <<"Code">>},
+            <<"228">>,
+            {{2026, 02, 25}, {22, 42, 00}},
+            {{2026, 02, 25}, {22, 50, 00}},
+            <<"tested csv-export">>,
+            finished
+        ),
+    ?assertEqual(
+        Track,
+        compose:compose(
+            [
+                fun track:from_map/1,
+                fun erlang:hd/1,
+                fun either:extract/1,
+                fun(X) -> import(X, Activities) end,
+                fun export/1
+            ],
+            [track:to_map(Track)]
+        )
+    ).
+
+-endif.
