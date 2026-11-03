@@ -87,7 +87,7 @@ export_(Map) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec import(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
+-spec import(CSV :: unicode:unicode_binary(), Activities :: track:activities()) ->
     either:either(
         {error, Reason :: unicode:unicode_binary()},
         [track:external_map()]
@@ -111,7 +111,7 @@ import_from_csv(X, Bin) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec from_csv(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
+-spec from_csv(CSV :: unicode:unicode_binary(), Activities :: track:activities()) ->
     either:either(
         {error, from_csv_reason()},
         [track:track()]
@@ -138,7 +138,7 @@ from_csv(CSV, Activities) ->
         ),
     either:map(X, fun lists:reverse/1).
 
--spec from_csv_(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
+-spec from_csv_(CSV :: unicode:unicode_binary(), Activities :: track:activities()) ->
     either:either(
         from_csv_reason(),
         track:track()
