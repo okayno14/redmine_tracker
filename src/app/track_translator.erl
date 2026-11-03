@@ -1,13 +1,13 @@
 -module(track_translator).
 
--export([export/2, import/2]).
+-export([export/2, import/3]).
 
 -export_type([track_translator/0]).
 
 -type track_translator() ::
     #{
         import := fun(
-            (unicode:unicode_binary()) ->
+            (unicode:unicode_binary(), track:activites()) ->
                 either:either(
                     {error, Reason :: unicode:unicode_binary()},
                     [track:external_map()]
@@ -19,7 +19,7 @@
 -callback export([track:external_map()]) ->
     Bin :: unicode:unicode_binary().
 
--callback import(Bin :: unicode:unicode_binary()) ->
+-callback import(Bin :: unicode:unicode_binary(), Actitvities :: track:activites()) ->
     either:either(
         {error, Reason :: unicode:unicode_binary()},
         [track:external_map()]
@@ -35,14 +35,18 @@ export(TrackTranslator, L) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec import(track_translator(), Bin :: unicode:unicode_binary()) ->
+-spec import(
+    track_translator(),
+    Bin :: unicode:unicode_binary(),
+    Actitvities :: track:activites()
+) ->
     either:either(
         {error, Reason :: unicode:unicode_binary()},
         [track:external_map()]
     ).
 %%--------------------------------------------------------------------
-import(TrackTranslator, Bin) ->
+import(TrackTranslator, Bin, Actitvities) ->
     #{import := F} = TrackTranslator,
-    F(Bin).
+    F(Bin, Actitvities).
 %%--------------------------------------------------------------------
 

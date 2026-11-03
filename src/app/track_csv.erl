@@ -4,7 +4,7 @@
 
 -export([
     export/1,
-    import/1
+    import/2
 ]).
 
 -type from_csv_reason() ::
@@ -87,21 +87,20 @@ export_(Map) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec import(CSV :: unicode:unicode_binary()) ->
+-spec import(CSV :: unicode:unicode_binary(), Activities :: track:activites()) ->
     either:either(
         {error, Reason :: unicode:unicode_binary()},
         [track:external_map()]
     ).
-%% TODO добавить в аргумент activities
 %% TODO перетащить тесты
 %%--------------------------------------------------------------------
-import(Bin) ->
+import(Bin, Activities) ->
     compose:compose(
         [
             fun import_format_err/1,
             fun(X) -> import_from_csv(X, Bin) end
         ],
-        track:activities()
+        either:right(Activities)
     ).
 
 import_format_err(X) ->
@@ -258,7 +257,9 @@ from_csv_(CSV, Activities) ->
 %%--------------------------------------------------------------------
 
 %%--------------------------------------------------------------------
--spec format_import_error(Err :: from_csv_reason()) ->
+-spec format_import_error(
+    {error, {from_csv_reason(), Line :: unicode:unicode_binary()}}
+) ->
     {error, Reason :: unicode:unicode_binary()}.
 
 format_import_error({error, {Reason, Line}}) ->

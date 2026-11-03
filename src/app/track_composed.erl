@@ -249,7 +249,8 @@ export_track_translator(X, Format) ->
     db:transaction_ret(
         {error, {unknown_format, Format :: unicode:unicode_binary()}}
         | {error, {import, Msg :: unicode:unicode_binary()}}
-        | {error, {invalid, {TrackID :: pos_integer(), track:validate_err()}}},
+        | {error, {invalid, {TrackID :: pos_integer(), track:validate_err()}}}
+        | {error, {activities, not_found}},
         ok
     ).
 %%--------------------------------------------------------------------
@@ -266,6 +267,7 @@ import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
                     fun validate_tracks/1,
                     fun tracks_from_map/1,
                     fun import_tracks/1,
+                    fun activities/1,
                     fun(X) -> import_track_translator(X, Format) end
                 ],
                 either:right(Bin)
@@ -322,10 +324,22 @@ tracks_from_map(X) ->
 import_tracks(X) ->
     either:flatmap(
         X,
-        fun({TrackTranslator, Bin}) ->
+        fun({TrackTranslator, Bin, Activities}) ->
             either:leftmap(
-                track_translator:import(TrackTranslator, Bin),
+                track_translator:import(TrackTranslator, Bin, Activities),
                 fun({error, Msg}) -> {error, {import, Msg}} end
+            )
+        end
+    ).
+
+activities(X) ->
+    either:flatmap(
+        X,
+        fun({TrackTranslator, Bin}) ->
+            either:cata(
+                track:activities(),
+                fun({error, not_found}) -> {error, {activities, not_found}} end,
+                fun(Activities) -> {TrackTranslator, Bin, Activities} end
             )
         end
     ).
@@ -333,11 +347,11 @@ import_tracks(X) ->
 import_track_translator(X, Format) ->
     either:flatmap(
         X,
-        fun(CSV) ->
+        fun(Bin) ->
             either:cata(
                 track_translator_strategy:make(Format),
                 fun({error, unknown_format}) -> {error, {unknown_format, Format}} end,
-                fun(TrackTranslator) -> {TrackTranslator, CSV} end
+                fun(TrackTranslator) -> {TrackTranslator, Bin} end
             )
         end
     ).

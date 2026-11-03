@@ -8,9 +8,10 @@
         track_translator:track_translator()
     ).
 make(<<"csv">>) ->
+    %% TODO перетащить внутрь модуля track_csv
     either:right(
         #{
-            import => fun track_csv:import/1,
+            import => fun track_csv:import/2,
             export => fun track_csv:export/1
         }
     );

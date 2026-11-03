@@ -73,6 +73,7 @@
     desc := unicode:unicode_binary()
 }.
 
+%% TODO rename
 -type activites() ::
     #{
         ActivityDesc :: unicode:unicode_binary() => ActivityID :: pos_integer()
@@ -715,8 +716,10 @@ delete(Track = #track{}) ->
     either:either({error, not_found}, Activities :: activites()).
 activities() ->
     case application:get_env(redmine_tracker, activities) of
-        undefined -> either:left({error, not_found});
-        {ok, Activities} -> either:right(Activities)
+        {ok, Activities = #{}} ->
+            either:right(Activities);
+        _ ->
+            either:left({error, not_found})
     end.
 
 -spec activity(ActivityDesc :: unicode:unicode_binary(), Activities :: activites()) ->

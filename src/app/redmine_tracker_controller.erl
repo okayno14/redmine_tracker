@@ -19,6 +19,7 @@ route(Arg = #{request := <<"export">>}) ->
                     response:error_response(
                         unknown_format,
                         %% TODO вынести в отдельную функцию
+                        %% TODO надо написать опасный characters_to_binary, чтобы eqwalizer перестал триггериться
                         unicode:characters_to_binary([
                             ~"No translator for ", ~"\"", Format, ~"\"", ~" ", ~"format."
                         ])
@@ -63,6 +64,11 @@ route(Arg = #{request := <<"import">>}) ->
                     response:error_response(
                         invalid,
                         unicode:characters_to_binary([~"Validation error:\n" | ErrorList2])
+                    );
+                {false, {throw, {error, {activities, not_found}}}} ->
+                    response:error_response(
+                        activities,
+                        ~"Activites DB not found. Impossible to import."
                     );
                 _V ->
                     nomatch
