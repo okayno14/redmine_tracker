@@ -68,7 +68,7 @@ route(Arg = #{request := <<"import">>}) ->
                 {false, {throw, {error, {activities, not_found}}}} ->
                     response:error_response(
                         activities,
-                        ~"Activites DB not found. Impossible to import."
+                        ~"Activities DB not found. Impossible to import."
                     );
                 _V ->
                     nomatch

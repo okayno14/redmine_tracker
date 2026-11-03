@@ -56,7 +56,7 @@
     external_map/0,
     validate_err/0,
     push_to_redmine_reason/0,
-    activites/0,
+    activities/0,
     activity/0
 ]).
 
@@ -74,7 +74,7 @@
 }.
 
 %% TODO rename
--type activites() ::
+-type activities() ::
     #{
         ActivityDesc :: unicode:unicode_binary() => ActivityID :: pos_integer()
     }.
@@ -713,7 +713,7 @@ delete(Track = #track{}) ->
 %%%===================================================================
 
 -spec activities() ->
-    either:either({error, not_found}, Activities :: activites()).
+    either:either({error, not_found}, Activities :: activities()).
 activities() ->
     case application:get_env(redmine_tracker, activities) of
         {ok, Activities = #{}} ->
@@ -722,7 +722,7 @@ activities() ->
             either:left({error, not_found})
     end.
 
--spec activity(ActivityDesc :: unicode:unicode_binary(), Activities :: activites()) ->
+-spec activity(ActivityDesc :: unicode:unicode_binary(), Activities :: activities()) ->
     either:either({error, not_found}, activity()).
 activity(ActivityDesc, Activities) ->
     case maps:get(ActivityDesc, Activities, not_found) of
