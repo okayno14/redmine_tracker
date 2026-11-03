@@ -767,7 +767,14 @@ push_to_redmine_test_() ->
                     httpc,
                     request,
                     fun(_, _, _, _) ->
-                        {ok, <<"ok">>}
+                        {
+                            ok,
+                            {
+                                _StatusLine = {_HttpVersion = "version", 201, "Created"},
+                                _Headers = [],
+                                _HttpBodyResult = ~""
+                            }
+                        }
                     end
                 ),
                 track:push_to_redmine(
