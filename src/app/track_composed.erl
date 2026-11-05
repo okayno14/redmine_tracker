@@ -6,9 +6,9 @@
     begin_track/4,
     %% если последний трекинг незавершённый, то завершаем его
     end_track_last/0,
-    %% экспортировать всю базу в csv
+    %% экспортировать всю базу в формат
     export/1,
-    %% переписать всю базу содержимым csv
+    %% переписать всю базу содержимым формата
     import/2,
     %% очистить всю базу и отправить в redmine_api
     push_to_redmine/0
@@ -176,7 +176,7 @@ end_track_last() ->
 -spec export(Format :: unicode:unicode_binary()) ->
     db:transaction_ret(
         {error, {unknown_format, Format :: unicode:unicode_binary()}},
-        CSV :: unicode:unicode_binary()
+        Data :: unicode:unicode_binary()
     ).
 %%--------------------------------------------------------------------
 export(Format) when is_binary(Format) ->
@@ -186,7 +186,7 @@ export(Format) when is_binary(Format) ->
                 [
                     fun db:either_throw/1,
                     fun export_process_ret/1,
-                    fun maps_to_csv_/1,
+                    fun maps_to_format/1,
                     fun tracks_to_maps/1,
                     fun tracks_all/1,
                     fun(X) -> export_track_translator(X, Format) end
@@ -194,7 +194,7 @@ export(Format) when is_binary(Format) ->
                 either:right(
                     #{
                         track_translator => undefined,
-                        csv => [],
+                        data => [],
                         timestamp => {{0, 0, 0}, {0, 0, 0}}
                     }
                 )
@@ -203,14 +203,14 @@ export(Format) when is_binary(Format) ->
      ).
 
 export_process_ret(X) ->
-    either:map(X, fun(Args) -> maps:get(csv, Args) end).
+    either:map(X, fun(Args) -> maps:get(data, Args) end).
 
-maps_to_csv_(X) ->
+maps_to_format(X) ->
     either:map(
         X,
         fun(Args) ->
-            #{csv := Tracks, track_translator := TrackTranslator} = Args,
-            Args#{csv => track_translator:export(TrackTranslator, Tracks)}
+            #{data := Tracks, track_translator := TrackTranslator} = Args,
+            Args#{data => track_translator:export(TrackTranslator, Tracks)}
         end
     ).
 
@@ -218,8 +218,8 @@ tracks_to_maps(X) ->
     either:map(
         X,
         fun(Args) ->
-            #{csv := Tracks} = Args,
-            Args#{csv => [track:to_map(Track) || Track <- Tracks]}
+            #{data := Tracks} = Args,
+            Args#{data => [track:to_map(Track) || Track <- Tracks]}
         end
     ).
 
@@ -227,7 +227,7 @@ tracks_all(X) ->
     either:map(
         X,
         fun(Args) ->
-            Args#{csv => tracks:all_sorted_by_timestamp_start()}
+            Args#{data => tracks:all_sorted_by_timestamp_start()}
         end
     ).
 
@@ -247,7 +247,7 @@ export_track_translator(X, Format) ->
 
 %%--------------------------------------------------------------------
 -spec import(
-    CSV :: unicode:unicode_binary(),
+    Data :: unicode:unicode_binary(),
     Format :: unicode:unicode_binary()
 ) ->
     db:transaction_ret(
@@ -258,7 +258,7 @@ export_track_translator(X, Format) ->
         ok
     ).
 %%--------------------------------------------------------------------
-import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
+import(Data, Format) when is_binary(Data), is_binary(Format) ->
     db:transaction(
         fun() ->
             compose:compose(
@@ -274,7 +274,7 @@ import(Bin, Format) when is_binary(Bin), is_binary(Format) ->
                     fun activities/1,
                     fun(X) -> import_track_translator(X, Format) end
                 ],
-                either:right(Bin)
+                either:right(Data)
             )
         end
     ).
@@ -328,9 +328,9 @@ tracks_from_map(X) ->
 import_tracks(X) ->
     either:flatmap(
         X,
-        fun({TrackTranslator, Bin, Activities}) ->
+        fun({TrackTranslator, Data, Activities}) ->
             either:leftmap(
-                track_translator:import(TrackTranslator, Bin, Activities),
+                track_translator:import(TrackTranslator, Data, Activities),
                 fun({error, Msg}) -> {error, {import, Msg}} end
             )
         end
@@ -339,11 +339,11 @@ import_tracks(X) ->
 activities(X) ->
     either:flatmap(
         X,
-        fun({TrackTranslator, Bin}) ->
+        fun({TrackTranslator, Data}) ->
             either:cata(
                 track:activities(),
                 fun({error, not_found}) -> {error, {activities, not_found}} end,
-                fun(Activities) -> {TrackTranslator, Bin, Activities} end
+                fun(Activities) -> {TrackTranslator, Data, Activities} end
             )
         end
     ).
@@ -351,11 +351,11 @@ activities(X) ->
 import_track_translator(X, Format) ->
     either:flatmap(
         X,
-        fun(Bin) ->
+        fun(Data) ->
             either:cata(
                 track_translator_strategy:make(Format),
                 fun({error, unknown_format}) -> {error, {unknown_format, Format}} end,
-                fun(TrackTranslator) -> {TrackTranslator, Bin} end
+                fun(TrackTranslator) -> {TrackTranslator, Data} end
             )
         end
     ).

@@ -25,11 +25,10 @@ cli() ->
             "import" => #{
                 arguments => [
                     #{
-                        %% TODO убрать упоминание csv
-                        name => csv,
+                        name => data,
                         default => <<"stdin">>,
                         type => binary,
-                        help => <<"\"stdin\"  or \"Path\" - path to csv-file">>
+                        help => <<"\"stdin\"  or \"Path\" - path to file">>
                     },
                     #{
                         name => format,
@@ -91,23 +90,23 @@ export(Arg = #{}) ->
         end,
     ProcessResp =
         fun
-            (#{type := ok, data := CSV}) ->
-                io:format("~ts\n", [CSV]),
+            (#{type := ok, data := Data}) ->
+                io:format("~ts\n", [Data]),
                 ok;
             (_) ->
                 nomatch
         end,
     process_request(Req, ProcessResp).
 
-import(Arg = #{csv := <<"stdin">>}) ->
+import(Arg = #{data := <<"stdin">>}) ->
     Req =
         fun() ->
-            CSV = unicode:characters_to_binary(read_all_io(standard_io, [])),
+            Data = unicode:characters_to_binary(read_all_io(standard_io, [])),
             either:right(
                 request:encode(
                     #{
                         request => <<"import">>,
-                        csv => CSV,
+                        data => Data,
                         format => maps:get(format, Arg)
                     },
                     oneline
@@ -122,17 +121,17 @@ import(Arg = #{csv := <<"stdin">>}) ->
                 nomatch
         end,
     process_request(Req, ProcessResp);
-import(Arg = #{csv := Path}) ->
+import(Arg = #{data := Path}) ->
     Req =
         fun() ->
             case file:read_file(Path) of
                 {ok, Binary} ->
-                    CSV = unicode:characters_to_binary(Binary),
+                    Data = unicode:characters_to_binary(Binary),
                     either:right(
                         request:encode(
                             #{
                                 request => <<"import">>,
-                                csv => CSV,
+                                data => Data,
                                 format => maps:get(format, Arg)
                             },
                             oneline
@@ -141,7 +140,7 @@ import(Arg = #{csv := Path}) ->
                 {error, Reason} ->
                     either:left(
                         response:error_response(
-                            read_csv_file,
+                            read_import_file,
                             unicode:characters_to_binary(file:format_error(Reason))
                         )
                     )

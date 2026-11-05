@@ -14,7 +14,7 @@ route(Arg = #{request := <<"export">>}) ->
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of
-                {true, CSV} -> response:ok_response(CSV);
+                {true, Data} -> response:ok_response(Data);
                 {false, {throw, {error, {unknown_format, Format}}}} ->
                     response:error_response(
                         unknown_format,
@@ -29,15 +29,15 @@ route(Arg = #{request := <<"export">>}) ->
         end
     };
 route(Arg = #{request := <<"import">>}) ->
-    #{<<"csv">> := CSV, <<"format">> := Format} = Arg,
+    #{<<"data">> := Data, <<"format">> := Format} = Arg,
     {
         fun() ->
-            track_composed:import(CSV, Format)
+            track_composed:import(Data, Format)
         end,
         fun(Either) ->
             case {either:is_right(Either), either:extract(Either)} of
                 {true, ok} ->
-                    response:ok_response(CSV);
+                    response:ok_response(Data);
                 {false, {throw, {error, Msg}}} when is_binary(Msg) ->
                     response:error_response(bad_import, Msg);
                 {false, {throw, {error, {import, Msg}}}} ->
